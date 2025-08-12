@@ -1,0 +1,38 @@
+services:
+  postgrest:
+    image: postgrest/postgrest:latest
+    container_name: postgrest
+    restart: unless-stopped
+    env_file:
+      - ./secrets/.env.postgrest
+    ports:
+      - "3000:3000"
+    networks:
+      - chattterbox-network
+    labels:
+      # Datadog log collection
+      - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
+      # Datadog health check (optional)
+      - 'com.datadoghq.ad.check_names=["http_check"]'
+      - "com.datadoghq.ad.init_configs=[{}]"
+      - 'com.datadoghq.ad.instances=[{"name": "postgrest", "url": "http://%%host%%:3000", "timeout": 5}]'
+
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    container_name: dd-agent
+    restart: unless-stopped
+    env_file:
+      - ./secrets/.env.datadog
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
+    networks:
+      - chattterbox-network
+    pid: host
+
+networks:
+  chattterbox-network:
+    driver: bridge
