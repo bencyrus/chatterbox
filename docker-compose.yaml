@@ -5,17 +5,39 @@ services:
     restart: unless-stopped
     env_file:
       - ./secrets/.env.postgrest
-    ports:
-      - "3000:3000"
+    # NO external ports - internal only for security
     networks:
       - chattterbox-network
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
-      # Datadog health check (optional)
+      # Datadog health check (internal)
       - 'com.datadoghq.ad.check_names=["http_check"]'
       - "com.datadoghq.ad.init_configs=[{}]"
       - 'com.datadoghq.ad.instances=[{"name": "postgrest", "url": "http://%%host%%:3000", "timeout": 5}]'
+
+  caddy:
+    image: caddy:alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80" # HTTP (for redirect to HTTPS)
+      - "443:443" # HTTPS
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - chattterbox-network
+    depends_on:
+      - postgrest
+    labels:
+      # Datadog log collection
+      - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
+      # Datadog health check (external)
+      - 'com.datadoghq.ad.check_names=["http_check"]'
+      - "com.datadoghq.ad.init_configs=[{}]"
+      - 'com.datadoghq.ad.instances=[{"name": "caddy", "url": "https://api.glovee.io", "timeout": 5}]'
 
   datadog:
     image: gcr.io/datadoghq/agent:7
@@ -32,6 +54,10 @@ services:
     networks:
       - chattterbox-network
     pid: host
+
+volumes:
+  caddy_data:
+  caddy_config:
 
 networks:
   chattterbox-network:

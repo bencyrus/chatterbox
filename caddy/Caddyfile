@@ -1,0 +1,8 @@
+api.glovee.io {
+    reverse_proxy postgrest:3000
+    
+    log {
+        output stdout
+        format json
+    }
+}
