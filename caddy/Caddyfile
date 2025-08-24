@@ -6,11 +6,8 @@ api.glovee.io {
         format filter {
             wrap json
             fields {
-                ts time
-                request_method http.request.method
-                request_uri http.request.uri
+                common_log >
                 request_body http.request.body
-                response_status http.response.status
                 response_body http.response.body
             }
         }
