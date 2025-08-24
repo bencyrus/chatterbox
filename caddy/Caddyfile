@@ -3,13 +3,6 @@ api.glovee.io {
     
     log {
         output stdout
-        format filter {
-            wrap json
-            fields {
-                common_log >
-                request_body http.request.body
-                response_body http.response.body
-            }
-        }
+        format json
     }
 }
