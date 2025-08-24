@@ -3,6 +3,8 @@ services:
     image: postgrest/postgrest:latest
     container_name: postgrest
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     env_file:
       - ./secrets/.env.postgrest
     # NO external ports - internal only for security
@@ -11,10 +13,6 @@ services:
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
-      # Datadog health check (internal)
-      - 'com.datadoghq.ad.check_names=["http_check"]'
-      - "com.datadoghq.ad.init_configs=[{}]"
-      - 'com.datadoghq.ad.instances=[{"name": "postgrest", "url": "http://%%host%%:3000", "timeout": 5}]'
 
   caddy:
     image: caddy:alpine
@@ -34,10 +32,6 @@ services:
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
-      # Datadog health check (external)
-      - 'com.datadoghq.ad.check_names=["http_check"]'
-      - "com.datadoghq.ad.init_configs=[{}]"
-      - 'com.datadoghq.ad.instances=[{"name": "caddy", "url": "https://api.glovee.io", "timeout": 5}]'
 
   datadog:
     image: gcr.io/datadoghq/agent:7
