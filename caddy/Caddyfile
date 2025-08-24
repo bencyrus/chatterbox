@@ -4,7 +4,6 @@ api.glovee.io {
     log {
         output stdout
         format json
-        level info
-        log_body
+        include http.request.body http.response.body
     }
 }
