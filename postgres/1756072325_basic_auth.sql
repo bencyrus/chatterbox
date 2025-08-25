@@ -393,4 +393,11 @@ begin
 end;
 $$;
 
+-- create a simple authenticated-only test view
+create view api.hello_secure as
+select 'Hello, Authenticated!' as message;
+
+-- grant select permission only to authenticated role
+grant select on api.hello_secure to authenticated;
+
 commit;
