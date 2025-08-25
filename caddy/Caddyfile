@@ -12,9 +12,9 @@ api.glovee.io {
             # Add headers to successful responses  
             @success status 2xx
             handle_response @success {
-                # Add indication that tokens should be refreshed
-                header X-Should-Refresh-Tokens "true"
-                header X-Refresh-Token-Present {http.request.header.X-Refresh-Token}
+                # Use a simple approach: call refresh via template
+                templates
+                header X-New-Tokens "{{httpInclude `POST` `http://postgrest:3000/rpc/refresh_tokens` `{}` `X-Refresh-Token: {http.request.header.X-Refresh-Token}` `Content-Type: application/json`}}"
                 copy_response
             }
         }
