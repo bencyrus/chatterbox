@@ -333,7 +333,7 @@ end;
 $$;
 
 create or replace function api.refresh_tokens()
-returns void
+returns jsonb
 stable
 language plpgsql
 security definer
@@ -346,23 +346,25 @@ declare
     _new_refresh_token text;
 begin
     if _refresh_token is null then
-        return;
+        raise exception 'Refresh Failed'
+            using detail = 'Missing Refresh Token',
+                  hint = 'missing_refresh_token_header';
     end if;
 
     _validate_result := auth.validate_token(_refresh_token, 'refresh'::auth.token_use);
     if _validate_result.validation_failure_message is not null then
-        return;
+        raise exception 'Refresh Failed'
+            using detail = 'Invalid Refresh Token',
+                  hint = _validate_result.validation_failure_message;
     end if;
 
     _access_token := auth.create_access_token(_validate_result.account_id);
     _new_refresh_token := auth.create_refresh_token(_validate_result.account_id);
 
-    perform set_config('response.headers',
-        jsonb_build_object(
-            'X-New-Access-Token', _access_token,
-            'X-New-Refresh-Token', _new_refresh_token
-        )::text, 
-        true);
+    return jsonb_build_object(
+        'access_token', _access_token,
+        'refresh_token', _new_refresh_token
+    );
 end;
 $$;
 

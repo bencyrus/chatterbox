@@ -4,7 +4,7 @@ api.glovee.io {
         format json
     }
 
-    # For requests with refresh token, just call refresh function after success
+    # Simple approach: intercept successful responses and add token headers
     reverse_proxy postgrest:3000 {
         @needs_refresh {
             status 2xx
@@ -12,9 +12,13 @@ api.glovee.io {
         }
         
         handle_response @needs_refresh {
-            # Simple: call refresh function and add any headers it sets
             templates
-            header X-Token-Refresh-Result "{{httpPost "http://postgrest:3000/rpc/refresh_tokens" (dict "Content-Type" "application/json" "X-Refresh-Token" (.Request.Header.Get "X-Refresh-Token"))}}"
+            
+            # Call refresh endpoint once and extract both tokens
+            vars refresh_response "{{httpPost \"http://postgrest:3000/rpc/refresh_tokens\" (dict \"Content-Type\" \"application/json\" \"X-Refresh-Token\" (.Request.Header.Get \"X-Refresh-Token\"))}}"
+            header X-New-Access-Token "{{$tokens := mustFromJson .Vars.refresh_response}}{{$tokens.access_token}}"
+            header X-New-Refresh-Token "{{$tokens := mustFromJson .Vars.refresh_response}}{{$tokens.refresh_token}}"
+            
             copy_response
         }
     }
