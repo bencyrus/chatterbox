@@ -12,6 +12,7 @@ create table internal.config (
     value jsonb not null
 );
 
+
 create or replace function internal.get_config(_key text)
 returns jsonb
 language sql
@@ -359,7 +360,21 @@ begin
 end;
 $$;
 
-create or replace function api.pre_request_refresh_tokens()
+create or replace function internal.set_response_header(_key text, _value text)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _existing text := nullif(current_setting('response.headers', true), '');
+    _headers jsonb := coalesce(_existing::jsonb, '[]'::jsonb);
+begin
+    _headers := _headers || jsonb_build_array(jsonb_build_object(_key, _value));
+    perform set_config('response.headers', _headers::text, true);
+end;
+$$;
+
+create or replace function internal.pre_request_refresh_tokens()
 returns void
 language plpgsql
 security definer
@@ -368,7 +383,6 @@ declare
     _headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
     _refresh_token text := _headers->>'x-refresh-token';
     _result auth.refresh_tokens_result;
-    _response_headers text;
 begin
     if _refresh_token is null then
         return;
@@ -376,11 +390,8 @@ begin
 
     _result := auth.refresh_tokens(_refresh_token);
     if _result.validation_failure_message is null then
-        _response_headers := json_build_array(
-            json_build_object('x-access-token', _result.access_token),
-            json_build_object('x-refresh-token', _result.refresh_token)
-        )::text;
-        perform set_config('response.headers', _response_headers, true);
+        perform internal.set_response_header('X-Access-Token', _result.access_token);
+        perform internal.set_response_header('X-Refresh-Token', _result.refresh_token);
     end if;
 end;
 $$;
@@ -391,7 +402,8 @@ language plpgsql
 security definer
 as $$
 begin
-    perform api.pre_request_refresh_tokens();
+    perform internal.set_response_header('X-Pre-Request', 'ran');
+    perform internal.pre_request_refresh_tokens();
 end;
 $$;
 
