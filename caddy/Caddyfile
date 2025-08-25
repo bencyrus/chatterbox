@@ -12,13 +12,9 @@ api.glovee.io {
         }
         
         handle_response @needs_refresh {
-            templates
-            
-            # Call refresh endpoint once and extract both tokens
-            vars refresh_response "{{httpPost \"http://postgrest:3000/rpc/refresh_tokens\" (dict \"Content-Type\" \"application/json\" \"X-Refresh-Token\" (.Request.Header.Get \"X-Refresh-Token\"))}}"
-            header X-New-Access-Token "{{$tokens := mustFromJson .Vars.refresh_response}}{{$tokens.access_token}}"
-            header X-New-Refresh-Token "{{$tokens := mustFromJson .Vars.refresh_response}}{{$tokens.refresh_token}}"
-            
+            # Simple test - just add a header to confirm this is working
+            header X-Refresh-Token-Detected "yes"
+            header X-Original-Refresh-Token {http.request.header.X-Refresh-Token}
             copy_response
         }
     }
