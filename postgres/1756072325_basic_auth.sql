@@ -152,6 +152,7 @@ as $$
     select auth.sign(
         jsonb_build_object(
             'sub', _account_id,
+            'role', 'authenticated',
             'token_use', 'access'::auth.token_use,
             'iat', extract(epoch from now())::int,
             'nbf', extract(epoch from now())::int,
@@ -170,6 +171,7 @@ as $$
     select auth.sign(
         jsonb_build_object(
             'sub', _account_id,
+            'role', 'authenticated',
             'token_use', 'refresh'::auth.token_use,
             'iat', extract(epoch from now())::int,
             'nbf', extract(epoch from now())::int,
