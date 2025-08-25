@@ -333,7 +333,7 @@ end;
 $$;
 
 create or replace function api.refresh_tokens()
-returns jsonb
+returns void
 stable
 language plpgsql
 security definer
@@ -346,66 +346,27 @@ declare
     _new_refresh_token text;
 begin
     if _refresh_token is null then
-        raise exception 'Refresh Failed'
-            using detail = 'Missing Refresh Token',
-                  hint = 'missing_refresh_token_header';
+        return;
     end if;
 
     _validate_result := auth.validate_token(_refresh_token, 'refresh'::auth.token_use);
     if _validate_result.validation_failure_message is not null then
-        raise exception 'Refresh Failed'
-            using detail = 'Invalid Refresh Token',
-                  hint = _validate_result.validation_failure_message;
+        return;
     end if;
 
     _access_token := auth.create_access_token(_validate_result.account_id);
     _new_refresh_token := auth.create_refresh_token(_validate_result.account_id);
 
-    return jsonb_build_object(
-        'access_token', _access_token,
-        'refresh_token', _new_refresh_token
-    );
+    perform set_config('response.headers',
+        jsonb_build_object(
+            'X-New-Access-Token', _access_token,
+            'X-New-Refresh-Token', _new_refresh_token
+        )::text, 
+        true);
 end;
 $$;
 
 grant execute on function api.refresh_tokens() to anon;
-
--- wrapper function for Caddy orchestration: handles original request + token refresh
-create or replace function api.request_with_refresh()
-returns jsonb
-stable
-language plpgsql
-security definer
-as $$
-declare
-    _headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
-    _refresh_token text := _headers->>'x-refresh-token';
-    _original_uri text := _headers->>'x-original-uri';
-    _original_method text := _headers->>'x-original-method';
-    _refreshed_tokens jsonb;
-    _original_response jsonb;
-begin
-    -- First, refresh the tokens
-    if _refresh_token is not null then
-        _refreshed_tokens := api.refresh_tokens();
-    else
-        _refreshed_tokens := '{"error": "No refresh token provided"}'::jsonb;
-    end if;
-    
-    -- For now, we'll return a structured response with token refresh
-    -- In a full implementation, you'd make the original request here
-    -- This is a simplified version that just returns the refreshed tokens
-    return jsonb_build_object(
-        'tokens_refreshed', true,
-        'new_tokens', _refreshed_tokens,
-        'original_uri', _original_uri,
-        'original_method', _original_method,
-        'message', 'Request processed with automatic token refresh'
-    );
-end;
-$$;
-
-grant execute on function api.request_with_refresh() to anon;
 
 -- create a simple authenticated-only test view
 create view api.hello_secure as

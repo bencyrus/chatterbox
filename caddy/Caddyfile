@@ -4,32 +4,18 @@ api.glovee.io {
         format json
     }
 
-    # Simple and working solution: Transform requests with refresh tokens
-    # into a combined request that returns both original data + refreshed tokens
-    
-    @has_refresh_token header X-Refresh-Token *
-    
-    # Handle requests with refresh token by changing them to hit a wrapper endpoint
-    handle @has_refresh_token {
-        # Rewrite to call our wrapper function that does both operations
-        rewrite * /rpc/request_with_refresh
-        reverse_proxy postgrest:3000 {
-            header_up Content-Type "application/json"
-            header_up X-Original-URI {http.request.uri}
-            header_up X-Original-Method {http.request.method}
-            header_up X-Refresh-Token {http.request.header.X-Refresh-Token}
+    # For requests with refresh token, just call refresh function after success
+    reverse_proxy postgrest:3000 {
+        @needs_refresh {
+            status 2xx
+            header X-Refresh-Token *
         }
-    }
-    
-    # Handle direct calls to refresh endpoint
-    handle /rpc/refresh_tokens {
-        reverse_proxy postgrest:3000 {
-            header_up Content-Type "application/json"
+        
+        handle_response @needs_refresh {
+            # Simple: call refresh function and add any headers it sets
+            templates
+            header X-Token-Refresh-Result "{{httpPost "http://postgrest:3000/rpc/refresh_tokens" (dict "Content-Type" "application/json" "X-Refresh-Token" (.Request.Header.Get "X-Refresh-Token"))}}"
+            copy_response
         }
-    }
-    
-    # Handle all other requests normally  
-    handle {
-        reverse_proxy postgrest:3000
     }
 }
