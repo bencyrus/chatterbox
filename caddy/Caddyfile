@@ -1,5 +1,10 @@
 api.glovee.io {
     reverse_proxy postgrest:3000
+
+    header {
+        Access-Control-Allow-Headers "Authorization, Content-Type, X-Refresh-Token"
+        Access-Control-Expose-Headers "X-Access-Token, X-Refresh-Token"
+    }
     
     log {
         output stdout
