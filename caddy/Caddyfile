@@ -4,18 +4,20 @@ api.glovee.io {
         format json
     }
 
-    # Simple approach: intercept successful responses and add token headers
-    reverse_proxy postgrest:3000 {
-        @needs_refresh {
-            status 2xx
-            header X-Refresh-Token *
-        }
+    # Test: Add headers based on request headers before proxying
+    @has_refresh_token header X-Refresh-Token *
+    
+    handle @has_refresh_token {
+        # Add test headers before proxying
+        header_down X-Refresh-Token-Detected "yes-before-proxy"
         
-        handle_response @needs_refresh {
-            # Simple test - just add a header to confirm this is working
-            header X-Refresh-Token-Detected "yes"
-            header X-Original-Refresh-Token {http.request.header.X-Refresh-Token}
-            copy_response
+        reverse_proxy postgrest:3000 {
+            # Add test headers to the response
+            header_down X-Refresh-Token-Value {http.request.header.X-Refresh-Token}
         }
+    }
+    
+    handle {
+        reverse_proxy postgrest:3000
     }
 }
