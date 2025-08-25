@@ -332,26 +332,24 @@ begin
 end;
 $$;
 
-create or replace function api.refresh_tokens()
+create or replace function api.refresh_tokens(refresh_token text)
 returns jsonb
 stable
 language plpgsql
 security definer
 as $$
 declare
-    _headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
-    _refresh_token text := _headers->>'x-refresh-token';
     _validate_result auth.validate_token_result;
     _access_token text;
     _new_refresh_token text;
 begin
-    if _refresh_token is null then
+    if refresh_token is null then
         raise exception 'Refresh Failed'
             using detail = 'Missing Refresh Token',
-                  hint = 'missing_refresh_token_header';
+                  hint = 'missing_refresh_token';
     end if;
 
-    _validate_result := auth.validate_token(_refresh_token, 'refresh'::auth.token_use);
+    _validate_result := auth.validate_token(refresh_token, 'refresh'::auth.token_use);
     if _validate_result.validation_failure_message is not null then
         raise exception 'Refresh Failed'
             using detail = 'Invalid Refresh Token',
@@ -368,7 +366,7 @@ begin
 end;
 $$;
 
-grant execute on function api.refresh_tokens() to anon;
+grant execute on function api.refresh_tokens(text) to anon;
 
 -- create a simple authenticated-only test view
 create view api.hello_secure as
