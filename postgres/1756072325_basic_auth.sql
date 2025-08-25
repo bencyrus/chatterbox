@@ -5,6 +5,21 @@ create schema auth;
 create extension if not exists pgcrypto;
 create extension if not exists "uuid-ossp";
 
+create schema internal;
+
+create table internal.config (
+    key text primary key,
+    value jsonb not null
+);
+
+create or replace function internal.get_config(_key text)
+returns jsonb
+language sql
+as
+$$
+    select value from internal.config where key = _key;
+$$;
+
 create or replace function auth.is_email_valid(_email text)
 returns boolean
 language sql
@@ -36,13 +51,10 @@ create domain auth.token_use as text
 
 create or replace function auth.jwt_secret() returns text
 stable
-language plpgsql
+language sql
+security definer
 as $$
-declare
-    s text := nullif(current_setting('app.jwt_secret', true), '');
-begin
-    return s;
-end;
+    select internal.get_config('jwt_secret')->>'text';
 $$;
 
 create or replace function auth.url_encode(data bytea) returns text
