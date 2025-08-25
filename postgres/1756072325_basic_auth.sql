@@ -345,9 +345,7 @@ begin
 end;
 $$;
 
-create schema internal;
-
-create or replace function internal.pre_request_refresh_tokens()
+create or replace function api.pre_request_refresh_tokens()
 returns void
 language plpgsql
 security definer
@@ -373,13 +371,13 @@ begin
 end;
 $$;
 
-create or replace function internal.pre_request()
+create or replace function api.pre_request()
 returns void
 language plpgsql
 security definer
 as $$
 begin
-    perform internal.pre_request_refresh_tokens();
+    perform api.pre_request_refresh_tokens();
 end;
 $$;
 
