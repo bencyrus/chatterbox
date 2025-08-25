@@ -225,8 +225,8 @@ begin
     _create_result := auth.create_account(email, password);
 
     if _create_result.validation_failure_message is not null then
-        raise exception 'signup failed'
-            using detail = 'invalid request payload',
+        raise exception 'Signup Failed'
+            using detail = 'Invalid Request Payload',
                   hint = _create_result.validation_failure_message;
     end if;
 
@@ -260,14 +260,14 @@ begin
     where lower(auth.account.email) = _email;
 
     if _account.account_id is null then
-        raise exception 'login failed'
-            using detail = 'invalid credentials',
+        raise exception 'Login Failed'
+            using detail = 'Invalid Credentials',
                   hint = 'account_not_found';
     end if;
 
     if crypt(password, _account.hashed_password) <> _account.hashed_password then
-        raise exception 'login failed'
-            using detail = 'invalid credentials',
+        raise exception 'Login Failed'
+            using detail = 'Invalid Credentials',
                   hint = 'bad_password';
     end if;
 
