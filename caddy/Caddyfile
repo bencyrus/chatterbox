@@ -1,27 +1,8 @@
 api.glovee.io {
+    reverse_proxy postgrest:3000 {}
+    
     log {
         output stdout
         format json
-    }
-
-    # Handle requests with refresh token
-    @has_refresh_token header X-Refresh-Token *
-    
-    handle @has_refresh_token {
-        reverse_proxy postgrest:3000 {
-            # Add headers to successful responses  
-            @success status 2xx
-            handle_response @success {
-                # Use a simple approach: call refresh via template
-                templates
-                header X-New-Tokens "{{httpInclude `POST` `http://postgrest:3000/rpc/refresh_tokens` `{}` `X-Refresh-Token: {http.request.header.X-Refresh-Token}` `Content-Type: application/json`}}"
-                copy_response
-            }
-        }
-    }
-    
-    # Handle all other requests normally
-    handle {
-        reverse_proxy postgrest:3000
     }
 }
