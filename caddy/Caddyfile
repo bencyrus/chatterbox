@@ -1,8 +1,26 @@
 api.glovee.io {
-    reverse_proxy postgrest:3000
-    
     log {
         output stdout
         format json
+    }
+
+    # Main reverse proxy to PostgREST with automatic token refresh
+    reverse_proxy postgrest:3000 {
+        # For successful requests that include X-Refresh-Token header
+        @needs_refresh {
+            status 2xx
+            header X-Refresh-Token *
+        }
+        
+        handle_response @needs_refresh {
+            # Make a background request to refresh tokens
+            # Add headers to indicate tokens should be refreshed client-side
+            header X-Should-Refresh-Tokens "true"
+            header X-Refresh-Endpoint "/rpc/refresh_tokens"
+            header X-Refresh-Method "POST"
+            header X-Refresh-Headers "Content-Type: application/json, X-Refresh-Token: {http.request.header.X-Refresh-Token}"
+            
+            copy_response
+        }
     }
 }

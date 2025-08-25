@@ -332,80 +332,43 @@ begin
 end;
 $$;
 
-create type auth.refresh_tokens_result as (
-    validation_failure_message text,
-    access_token text,
-    refresh_token text
-);
-
-create or replace function auth.refresh_tokens(_refresh_token text)
-returns auth.refresh_tokens_result
-language plpgsql
-security definer
-as $$
-declare
-    _validate_result auth.validate_token_result;
-    _access_token text;
-    _refresh_token text;
-begin
-    _validate_result := auth.validate_token(_refresh_token, 'refresh'::auth.token_use);
-    if _validate_result.validation_failure_message is not null then
-        return (_validate_result.validation_failure_message, null, null)::auth.refresh_tokens_result;
-    end if;
-
-    _access_token := auth.create_access_token(_validate_result.account_id);
-    _refresh_token := auth.create_refresh_token(_validate_result.account_id);
-
-    return (null, _access_token, _refresh_token)::auth.refresh_tokens_result;
-end;
-$$;
-
-create or replace function internal.set_response_header(_key text, _value text)
-returns void
-language plpgsql
-security definer
-as $$
-declare
-    _existing text := nullif(current_setting('response.headers', true), '');
-    _headers jsonb := coalesce(_existing::jsonb, '[]'::jsonb);
-begin
-    _headers := _headers || jsonb_build_array(jsonb_build_object(_key, _value));
-    perform set_config('response.headers', _headers::text, true);
-end;
-$$;
-
-create or replace function internal.pre_request_refresh_tokens()
-returns void
+create or replace function api.refresh_tokens()
+returns jsonb
+stable
 language plpgsql
 security definer
 as $$
 declare
     _headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
     _refresh_token text := _headers->>'x-refresh-token';
-    _result auth.refresh_tokens_result;
+    _validate_result auth.validate_token_result;
+    _access_token text;
+    _new_refresh_token text;
 begin
     if _refresh_token is null then
-        return;
+        raise exception 'Refresh Failed'
+            using detail = 'Missing Refresh Token',
+                  hint = 'missing_refresh_token_header';
     end if;
 
-    _result := auth.refresh_tokens(_refresh_token);
-    if _result.validation_failure_message is null then
-        perform internal.set_response_header('X-Access-Token', _result.access_token);
-        perform internal.set_response_header('X-Refresh-Token', _result.refresh_token);
+    _validate_result := auth.validate_token(_refresh_token, 'refresh'::auth.token_use);
+    if _validate_result.validation_failure_message is not null then
+        raise exception 'Refresh Failed'
+            using detail = 'Invalid Refresh Token',
+                  hint = _validate_result.validation_failure_message;
     end if;
+
+    _access_token := auth.create_access_token(_validate_result.account_id);
+    _new_refresh_token := auth.create_refresh_token(_validate_result.account_id);
+
+    return jsonb_build_object(
+        'access_token', _access_token,
+        'refresh_token', _new_refresh_token
+    );
 end;
 $$;
 
-create or replace function api.pre_request()
-returns void
-language plpgsql
-security definer
-as $$
-begin
-    perform internal.set_response_header('X-Pre-Request', 'ran');
-    perform internal.pre_request_refresh_tokens();
-end;
-$$;
+grant execute on function api.refresh_tokens() to anon;
 
 -- create a simple authenticated-only test view
 create view api.hello_secure as
