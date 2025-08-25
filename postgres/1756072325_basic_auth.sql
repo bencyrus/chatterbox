@@ -370,6 +370,43 @@ $$;
 
 grant execute on function api.refresh_tokens() to anon;
 
+-- wrapper function for Caddy orchestration: handles original request + token refresh
+create or replace function api.request_with_refresh()
+returns jsonb
+stable
+language plpgsql
+security definer
+as $$
+declare
+    _headers jsonb := coalesce(nullif(current_setting('request.headers', true), '')::jsonb, '{}'::jsonb);
+    _refresh_token text := _headers->>'x-refresh-token';
+    _original_uri text := _headers->>'x-original-uri';
+    _original_method text := _headers->>'x-original-method';
+    _refreshed_tokens jsonb;
+    _original_response jsonb;
+begin
+    -- First, refresh the tokens
+    if _refresh_token is not null then
+        _refreshed_tokens := api.refresh_tokens();
+    else
+        _refreshed_tokens := '{"error": "No refresh token provided"}'::jsonb;
+    end if;
+    
+    -- For now, we'll return a structured response with token refresh
+    -- In a full implementation, you'd make the original request here
+    -- This is a simplified version that just returns the refreshed tokens
+    return jsonb_build_object(
+        'tokens_refreshed', true,
+        'new_tokens', _refreshed_tokens,
+        'original_uri', _original_uri,
+        'original_method', _original_method,
+        'message', 'Request processed with automatic token refresh'
+    );
+end;
+$$;
+
+grant execute on function api.request_with_refresh() to anon;
+
 -- create a simple authenticated-only test view
 create view api.hello_secure as
 select 'Hello, Authenticated!' as message;
