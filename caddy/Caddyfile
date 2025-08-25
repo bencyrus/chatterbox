@@ -4,15 +4,13 @@ api.glovee.io {
         format json
     }
 
-    # Test: Add headers based on request headers before proxying
+    # Test: Add headers based on request headers
     @has_refresh_token header X-Refresh-Token *
     
     handle @has_refresh_token {
-        # Add test headers before proxying
-        header_down X-Refresh-Token-Detected "yes-before-proxy"
-        
         reverse_proxy postgrest:3000 {
-            # Add test headers to the response
+            # Add response headers
+            header_down X-Refresh-Token-Detected "yes"
             header_down X-Refresh-Token-Value {http.request.header.X-Refresh-Token}
         }
     }
