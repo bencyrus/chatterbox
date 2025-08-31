@@ -141,7 +141,7 @@ as $$
       convert_from(auth.url_decode(r[1]), 'utf8')::jsonb as header,
       convert_from(auth.url_decode(r[2]), 'utf8')::jsonb as payload,
       r[3] = auth.algorithm_sign(r[1] || '.' || r[2], secret, algorithm) as signature_ok
-    from regexp_split_to_array(token, '\\.') r
+    from regexp_split_to_array(token, E'\\.') r
   ) jwt;
 $$;
 
