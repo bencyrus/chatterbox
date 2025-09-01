@@ -34,8 +34,7 @@ func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now tim
 		return 0, false
 	}
 
-	claims := &jwt.RegisteredClaims{}
-	_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, jwt.MapClaims{}, func(token *jwt.Token) (any, error) {
 		log.Println("ParseWithClaims")
 		return []byte(cfg.JWTSecret), nil
 	}, jwt.WithValidMethods([]string{"HS256"}))
@@ -43,11 +42,19 @@ func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now tim
 		log.Println("ParseWithClaims: error", err)
 		return 0, false
 	}
-	if claims.ExpiresAt == nil {
-		log.Println("ParseWithClaims: claims.ExpiresAt == nil")
+	// Extract exp from claims as a float64 Unix timestamp
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims == nil {
+		log.Println("ParseWithClaims: claims not MapClaims")
 		return 0, false
 	}
-	remaining := int(claims.ExpiresAt.Time.Sub(now).Seconds())
+	rawExp, exists := claims["exp"].(float64)
+	if !exists {
+		log.Println("ParseWithClaims: exp claim missing or invalid")
+		return 0, false
+	}
+	expUnix := int64(rawExp)
+	remaining := int(time.Unix(expUnix, 0).Sub(now).Seconds())
 	log.Println("remaining", remaining)
 	return remaining, true
 }
