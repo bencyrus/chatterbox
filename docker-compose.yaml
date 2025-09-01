@@ -1,4 +1,16 @@
 services:
+  gateway:
+    build: ./gateway
+    container_name: gateway
+    restart: unless-stopped
+    env_file:
+      - ./secrets/.env.gateway
+    networks:
+      - chattterbox-network
+    depends_on:
+      - postgrest
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "gateway", "service": "gateway"}]'
   postgrest:
     image: postgrest/postgrest:latest
     container_name: postgrest
@@ -21,6 +33,7 @@ services:
     ports:
       - "80:80" # HTTP (for redirect to HTTPS)
       - "443:443" # HTTPS
+      - "8080:8080" # Gateway service
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -28,7 +41,8 @@ services:
     networks:
       - chattterbox-network
     depends_on:
-      - postgrest
+      - gateway
+      - files
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'

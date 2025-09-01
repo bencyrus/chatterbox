@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/bencyrus/chatterbox/files/internal/config"
 )
@@ -47,49 +46,41 @@ func handleSignedURL() http.HandlerFunc {
 			http.Error(w, "missing files", http.StatusBadRequest)
 			return
 		}
-		fileIDs := toInt64Slice(arr)
-		if len(fileIDs) == 0 {
+
+		items, ok := arr.([]any)
+		if !ok {
+			http.Error(w, "files must be an array", http.StatusBadRequest)
+			return
+		}
+
+		out := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			switch v := item.(type) {
+			case string:
+				if v == "" {
+					continue
+				}
+				out = append(out, map[string]any{
+					"file_id": v,
+					"url":     placeholderImageURL,
+				})
+			case float64:
+				out = append(out, map[string]any{
+					"file_id": v,
+					"url":     placeholderImageURL,
+				})
+			default:
+				// ignore unsupported types
+			}
+		}
+
+		if len(out) == 0 {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("[]"))
 			return
 		}
 
-		// Build [{"file_id": <number>, "url": "<url>"}, ...]
-		out := make([]map[string]any, 0, len(fileIDs))
-		for _, fileID := range fileIDs {
-			out = append(out, map[string]any{
-				"file_id": fileID,
-				"url":     placeholderImageURL,
-			})
-		}
-
 		enc := json.NewEncoder(w)
 		_ = enc.Encode(out)
 	}
-}
-
-func toInt64Slice(v any) []int64 {
-	res := make([]int64, 0)
-	switch vv := v.(type) {
-	case []any:
-		for _, item := range vv {
-			switch t := item.(type) {
-			case float64:
-				id := int64(t)
-				if float64(id) == t {
-					res = append(res, id)
-				}
-			case string:
-				if t == "" {
-					continue
-				}
-				if n, err := strconv.ParseInt(t, 10, 64); err == nil {
-					res = append(res, n)
-				}
-			default:
-				// ignore unsupported types
-			}
-		}
-	}
-	return res
 }
