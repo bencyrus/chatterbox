@@ -50,12 +50,24 @@ create table if not exists auth.account (
 create domain auth.token_use as text
     check (value in ('access', 'refresh'));
 
-create or replace function auth.jwt_secret() returns text
+-- JWT configuration composite type and accessor
+create type auth.jwt_config as (
+    secret text,
+    access_token_expiry_seconds integer,
+    refresh_token_expiry_seconds integer
+);
+
+create or replace function auth.jwt_config()
+returns auth.jwt_config
 stable
 language sql
 security definer
 as $$
-    select internal.get_config('jwt_secret')->>'text';
+    select
+        (cfg->>'secret')::text as secret,
+        (cfg->>'access_token_expiry_seconds')::int as access_token_expiry_seconds,
+        (cfg->>'refresh_token_expiry_seconds')::int as refresh_token_expiry_seconds
+    from (select internal.get_config('jwt') as cfg) s;
 $$;
 
 create or replace function auth.url_encode(data bytea) returns text
@@ -145,11 +157,14 @@ as $$
   ) jwt;
 $$;
 
-create or replace function auth.create_access_token(_account_id bigint, _ttl_seconds integer default 60*60*24*7 /* 7 days */)
+create or replace function auth.create_access_token(_account_id bigint)
 returns text
 stable
 language sql
 as $$
+    with cfg as (
+        select auth.jwt_config() as c
+    )
     select auth.sign(
         jsonb_build_object(
             'sub', _account_id,
@@ -157,18 +172,25 @@ as $$
             'token_use', 'access'::auth.token_use,
             'iat', extract(epoch from now())::int,
             'nbf', extract(epoch from now())::int,
-            'exp', extract(epoch from now() + make_interval(secs => _ttl_seconds))::int
+            'exp', extract(
+                epoch from now() + make_interval(
+                    secs => ((cfg.c).access_token_expiry_seconds)
+                )
+            )::int
         ),
-        auth.jwt_secret(),
+        ((cfg.c).secret),
         'HS256'
-    );
+    ) from cfg;
 $$;
 
-create or replace function auth.create_refresh_token(_account_id bigint, _ttl_seconds integer default 60*60*24*30 /* 30 days */)
+create or replace function auth.create_refresh_token(_account_id bigint)
 returns text
 stable
 language sql
 as $$
+    with cfg as (
+        select auth.jwt_config() as c
+    )
     select auth.sign(
         jsonb_build_object(
             'sub', _account_id,
@@ -176,11 +198,15 @@ as $$
             'token_use', 'refresh'::auth.token_use,
             'iat', extract(epoch from now())::int,
             'nbf', extract(epoch from now())::int,
-            'exp', extract(epoch from now() + make_interval(secs => _ttl_seconds))::int
+            'exp', extract(
+                epoch from now() + make_interval(
+                    secs => ((cfg.c).refresh_token_expiry_seconds)
+                )
+            )::int
         ),
-        auth.jwt_secret(),
+        ((cfg.c).secret),
         'HS256'
-    );
+    ) from cfg;
 $$;
 
 create type auth.create_account_result as (
@@ -313,9 +339,12 @@ declare
     _sub bigint;
     _token_use text;
 begin
+    with cfg as (
+        select auth.jwt_config() as c
+    )
     select v.payload
     into _payload
-    from auth.verify(_token, auth.jwt_secret(), 'HS256') v
+    from auth.verify(_token, ((cfg.c).secret), 'HS256') v, cfg
     where v.valid;
 
     if _payload is null then
