@@ -49,6 +49,19 @@ services:
       - chattterbox-network
     pid: host
 
+  files:
+    build: ./files
+    container_name: files
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    env_file:
+      - ./secrets/.env.files
+    networks:
+      - chattterbox-network
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "files", "service": "files"}]'
+
 volumes:
   caddy_data:
   caddy_config:
