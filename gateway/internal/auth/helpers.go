@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -15,47 +14,36 @@ import (
 // seconds remaining until expiration. Second return is false when the token is
 // missing/invalid or has no expiry.
 func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now time.Time) (int, bool) {
-	log.Println("AccessTokenSecondsRemaining")
 	authz := headers.Get("Authorization")
-	log.Println("authz", authz)
 	if authz == "" {
-		log.Println("AccessTokenSecondsRemaining: authz == \"\"")
 		return 0, false
 	}
 	const bearerPrefix = "Bearer "
 	if !strings.HasPrefix(authz, bearerPrefix) {
-		log.Println("AccessTokenSecondsRemaining: !strings.HasPrefix(authz, bearerPrefix)")
 		return 0, false
 	}
 	tokenStr := strings.TrimSpace(strings.TrimPrefix(authz, bearerPrefix))
-	log.Println("tokenStr", tokenStr)
 	if tokenStr == "" {
-		log.Println("AccessTokenSecondsRemaining: tokenStr == \"\"")
 		return 0, false
 	}
 
 	token, err := jwt.ParseWithClaims(tokenStr, jwt.MapClaims{}, func(token *jwt.Token) (any, error) {
-		log.Println("ParseWithClaims")
 		return []byte(cfg.JWTSecret), nil
 	}, jwt.WithValidMethods([]string{"HS256"}))
 	if err != nil {
-		log.Println("ParseWithClaims: error", err)
 		return 0, false
 	}
 	// Extract exp from claims as a float64 Unix timestamp
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || claims == nil {
-		log.Println("ParseWithClaims: claims not MapClaims")
 		return 0, false
 	}
 	rawExp, exists := claims["exp"].(float64)
 	if !exists {
-		log.Println("ParseWithClaims: exp claim missing or invalid")
 		return 0, false
 	}
 	expUnix := int64(rawExp)
 	remaining := int(time.Unix(expUnix, 0).Sub(now).Seconds())
-	log.Println("remaining", remaining)
 	return remaining, true
 }
 
