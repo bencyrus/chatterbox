@@ -1,6 +1,8 @@
 services:
   gateway:
-    build: ./gateway
+    build:
+      context: .
+      dockerfile: ./gateway/Dockerfile
     container_name: gateway
     restart: unless-stopped
     env_file:
@@ -63,7 +65,9 @@ services:
     pid: host
 
   files:
-    build: ./files
+    build:
+      context: .
+      dockerfile: ./files/Dockerfile
     container_name: files
     restart: unless-stopped
     ports:
