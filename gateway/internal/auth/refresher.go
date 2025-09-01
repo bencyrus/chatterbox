@@ -22,16 +22,12 @@ type RefreshResult struct {
 // Any refresh error is returned, but callers may choose to ignore it.
 func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders http.Header) (*RefreshResult, error) {
 	refreshToken := requestHeaders.Get(cfg.RefreshTokenHeaderIn)
-	log.Println("refreshToken", refreshToken)
 	if refreshToken == "" {
-		log.Println("no refresh token")
 		return nil, nil
 	}
 
 	payload := map[string]string{"refresh_token": refreshToken}
-	log.Println("payload", payload)
 	body, _ := json.Marshal(payload)
-	log.Println("body", string(body))
 
 	client := &http.Client{Timeout: time.Duration(cfg.HTTPClientTimeoutSeconds) * time.Second}
 	url := cfg.PostgRESTURL + cfg.RefreshTokensPath
@@ -42,15 +38,14 @@ func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders htt
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
-	log.Println("resp", resp)
 	if err != nil {
-		log.Println("error", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	log.Println("resp", resp)
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Println("refresh failed: status", resp.StatusCode)
 		return nil, fmt.Errorf("refresh failed: status %d", resp.StatusCode)
 	}
 
@@ -59,11 +54,9 @@ func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders htt
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		log.Println("error", err)
 		return nil, err
 	}
 	if parsed.AccessToken == "" || parsed.RefreshToken == "" {
-		log.Println("refresh response missing tokens")
 		return nil, fmt.Errorf("refresh response missing tokens")
 	}
 
