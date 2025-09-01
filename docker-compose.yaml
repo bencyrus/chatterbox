@@ -33,7 +33,6 @@ services:
     ports:
       - "80:80" # HTTP (for redirect to HTTPS)
       - "443:443" # HTTPS
-      - "8080:8080" # Gateway service
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
