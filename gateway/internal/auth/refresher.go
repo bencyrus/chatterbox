@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -44,12 +43,10 @@ func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders htt
 	}
 	defer resp.Body.Close()
 
-	// Read and log the full response body for visibility
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
 		return nil, fmt.Errorf("failed to read refresh response body: %w", readErr)
 	}
-	log.Printf("refresh response: status=%d headers=%v body=%s", resp.StatusCode, resp.Header, string(bodyBytes))
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("refresh failed: status %d body: %s", resp.StatusCode, string(bodyBytes))

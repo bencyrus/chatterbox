@@ -1,7 +1,6 @@
 package proxy
 
 import (
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -41,7 +40,6 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Preflight token refresh only when the access token is nearing expiry
 	var refreshed *auth.RefreshResult
 	if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
-		log.Println("PreflightRefresh")
 		refreshed = auth.PreflightRefresh(ctx, g.cfg, r.Header, 2*time.Second)
 	}
 
