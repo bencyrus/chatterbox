@@ -1,5 +1,11 @@
 api.glovee.io {
-    reverse_proxy gateway:8080
+    # Add a unique UUID per request to the response headers
+    header X-Request-ID {http.request.uuid}
+
+    # Forward the same UUID to the upstream service as a request header
+    reverse_proxy gateway:8080 {
+        header_up X-Request-ID {http.request.uuid}
+    }
 
     log {
         output stdout
