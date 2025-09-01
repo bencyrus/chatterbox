@@ -4,10 +4,6 @@
 !.env.example
 !.env.*.example
 
-# Binary files (your compiled services)
-gateway
-files
-
 # IDE and editor files
 .vscode/
 .idea/

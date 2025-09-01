@@ -1,73 +1,35 @@
 Gateway
 
-Overview
+Purpose
 
-The gateway fronts PostgREST and transparently handles:
+- Reverse proxy to PostgREST with two responsibilities:
+  1. Best‑effort token refresh when access token is close to expiry
+  2. Inject signed file URLs into JSON responses that contain a top‑level `files` array
 
-- Auth token maintenance: When the access token is close to expiry (within REFRESH_THRESHOLD_SECONDS) and a refresh token header is present, it preflights a refresh (max 2s budget). If successful, it adds new tokens to the response headers without blocking or failing the upstream request.
-- File URL resolution: When an upstream JSON response includes a files array, the gateway calls the file service to resolve signed URLs and injects processed_files into the JSON while preserving the original files field.
+Behavior
 
-How it works
-
-- Request in → gateway → optional token refresh (preflight, 2s timeout) → reverse proxy to PostgREST
-- Response from PostgREST → gateway injects signed file URLs if files found → response out
-- Refresh success or failure never blocks or fails the main request. New tokens, when available, are returned via headers for the client to rotate.
+- Refresh: checks expiry and presence of refresh token header; runs a preflight refresh with a short timeout. Success or failure does not block the main request; new tokens (if any) are attached to response headers.
+- File URLs: if the upstream response is JSON and includes `files`, calls the files service and injects results as `processed_files` while preserving `files`.
 
 Headers
 
-- Incoming refresh header: REFRESH_TOKEN_HEADER_IN (default X-Refresh-Token)
-- Outgoing refreshed tokens: NEW_ACCESS_TOKEN_HEADER_OUT (default X-New-Access-Token), NEW_REFRESH_TOKEN_HEADER_OUT (default X-New-Refresh-Token)
+- Incoming refresh header: `REFRESH_TOKEN_HEADER_IN` (default `X-Refresh-Token`)
+- Outgoing refreshed tokens: `NEW_ACCESS_TOKEN_HEADER_OUT` and `NEW_REFRESH_TOKEN_HEADER_OUT`
+- Request correlation: `X-Request-ID` flows from Caddy and is logged
 
-Environment variables
+Configuration (env)
 
-Required
+- Required: `POSTGREST_URL`, `JWT_SECRET`, `REFRESH_TOKENS_PATH`, `REFRESH_THRESHOLD_SECONDS`, `FILE_SERVICE_URL`, `FILE_SIGNED_URL_PATH`, `FILES_FIELD_NAME`, `PROCESSED_FILES_FIELD_NAME`
+- Optional: `PORT`, `REFRESH_TOKEN_HEADER_IN`, `NEW_ACCESS_TOKEN_HEADER_OUT`, `NEW_REFRESH_TOKEN_HEADER_OUT`, `HTTP_CLIENT_TIMEOUT_SECONDS`
+- See [`internal/config/config.go`](internal/config/config.go) for source of truth.
 
-- POSTGREST_URL: Base URL for the PostgREST upstream (e.g., http://postgrest:3000)
-- JWT_SECRET: Must match the DB secret used to sign tokens
-- REFRESH_TOKENS_PATH: RPC path for token refresh (e.g., /rpc/refresh_tokens)
-- REFRESH_THRESHOLD_SECONDS: Only refresh when the access token expires within this many seconds
-- FILE_SERVICE_URL: Base URL for the file service (e.g., https://files.glovee.io)
-- FILE_SIGNED_URL_PATH: Path to the signed URL endpoint (e.g., /signed_url)
-- FILES_FIELD_NAME: JSON field name for file IDs array (e.g., files)
-- PROCESSED_FILES_FIELD_NAME: JSON field name for injected results (e.g., processed_files)
+Flow
 
-Optional (defaults shown)
-
-- PORT=8080
-- REFRESH_TOKEN_HEADER_IN=X-Refresh-Token
-- NEW_ACCESS_TOKEN_HEADER_OUT=X-New-Access-Token
-- NEW_REFRESH_TOKEN_HEADER_OUT=X-New-Refresh-Token
-- HTTP_CLIENT_TIMEOUT_SECONDS=10
-
-Example env (copy into secrets/.env.gateway)
-
-```
-PORT=8080
-
-POSTGREST_URL=http://postgrest:3000
-JWT_SECRET=replace_me_with_jwt_secret
-REFRESH_TOKENS_PATH=/rpc/refresh_tokens
-REFRESH_THRESHOLD_SECONDS=60
-
-REFRESH_TOKEN_HEADER_IN=X-Refresh-Token
-NEW_ACCESS_TOKEN_HEADER_OUT=X-New-Access-Token
-NEW_REFRESH_TOKEN_HEADER_OUT=X-New-Refresh-Token
-
-FILE_SERVICE_URL=http://files:8080
-FILE_SIGNED_URL_PATH=/signed_url
-FILES_FIELD_NAME=files
-PROCESSED_FILES_FIELD_NAME=processed_files
-
-HTTP_CLIENT_TIMEOUT_SECONDS=10
-```
-
-Development & running
-
-- docker-compose: The root compose file defines the gateway service and mounts secrets/.env.gateway.
-- Local build: inside gateway/, run go build ./... or go run ./cmd/gateway
+- Request → gateway (optional refresh) → PostgREST
+- Response ← gateway (optional file URL injection) ← PostgREST
 
 Notes
 
-- Refresh runs only when Authorization: Bearer <access> is within REFRESH_THRESHOLD_SECONDS of exp and REFRESH_TOKEN_HEADER_IN is provided.
-- File URL processing only runs for application/json responses containing a top-level files array.
-- Fail-safe design: both features are best-effort and never fail the main request.
+- Only processes `application/json` responses with a top‑level array named by `FILES_FIELD_NAME`.
+- Designed to be fail‑safe: token refresh and file URL processing never fail the main request.
+- Code reference: [`internal/proxy`](internal/proxy), [`internal/auth`](internal/auth), [`internal/files`](internal/files).
