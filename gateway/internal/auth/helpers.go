@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -44,19 +45,25 @@ func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now tim
 // ShouldRefreshAccessToken returns true when the access token is present and
 // will expire within cfg.RefreshThresholdSeconds.
 func ShouldRefreshAccessToken(cfg config.Config, headers http.Header, now time.Time) bool {
+	log.Println("ShouldRefreshAccessToken")
 	remaining, ok := AccessTokenSecondsRemaining(cfg, headers, now)
+	log.Println("remaining", remaining)
 	if !ok {
+		log.Println("ShouldRefreshAccessToken: no ok")
 		return false
 	}
+	log.Println("remaining <= cfg.RefreshThresholdSeconds", remaining <= cfg.RefreshThresholdSeconds)
 	return remaining <= cfg.RefreshThresholdSeconds
 }
 
 // PreflightRefresh attempts a token refresh within maxWait. Returns nil on timeout or error.
 func PreflightRefresh(ctx context.Context, cfg config.Config, requestHeaders http.Header, maxWait time.Duration) *RefreshResult {
+	log.Println("PreflightRefresh")
 	ctx2, cancel := context.WithTimeout(ctx, maxWait)
 	defer cancel()
 	res, err := RefreshIfPresent(ctx2, cfg, requestHeaders)
 	if err != nil || res == nil {
+		log.Println("PreflightRefresh: error or nil")
 		return nil
 	}
 	return res
