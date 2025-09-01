@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -37,11 +38,16 @@ func NewGateway(cfg config.Config) (*Gateway, error) {
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	// Log request arrival
+	log.Printf("gateway request: %s %s", r.Method, r.URL.Path)
+
 	// Preflight token refresh only when the access token is nearing expiry
 	var refreshed *auth.RefreshResult
 	if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
 		refreshed = auth.PreflightRefresh(ctx, g.cfg, r.Header, 2*time.Second)
 	}
+
+	log.Println("refreshed", refreshed)
 
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
@@ -55,6 +61,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ModifyResponse: func(resp *http.Response) error {
 			// Attach any refreshed tokens if available
 			auth.AttachRefreshedTokens(resp.Header, g.cfg, refreshed)
+			if refreshed != nil {
+				log.Printf("gateway added refreshed token headers for %s %s", r.Method, r.URL.Path)
+			}
 
 			// Process file URLs if needed
 			fileops.ProcessFileURLsIfNeeded(ctx, g.cfg, resp)
