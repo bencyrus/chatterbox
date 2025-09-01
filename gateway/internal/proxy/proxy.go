@@ -9,6 +9,7 @@ import (
 	"github.com/bencyrus/chatterbox/gateway/internal/auth"
 	"github.com/bencyrus/chatterbox/gateway/internal/config"
 	fileops "github.com/bencyrus/chatterbox/gateway/internal/files"
+	"github.com/bencyrus/chatterbox/shared/logger"
 )
 
 type Gateway struct {
@@ -37,10 +38,20 @@ func NewGateway(cfg config.Config) (*Gateway, error) {
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	logger.Debug(ctx, "processing request in gateway", logger.Fields{
+		"backend_url": g.backend.String(),
+		"method":      r.Method,
+		"path":        r.URL.Path,
+	})
+
 	// Preflight token refresh only when the access token is nearing expiry
 	var refreshed *auth.RefreshResult
 	if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
+		logger.Debug(ctx, "attempting token refresh")
 		refreshed = auth.PreflightRefresh(ctx, g.cfg, r.Header, 2*time.Second)
+		if refreshed != nil {
+			logger.Info(ctx, "token refresh successful")
+		}
 	}
 
 	proxy := &httputil.ReverseProxy{

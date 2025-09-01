@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/bencyrus/chatterbox/gateway/internal/config"
+	"github.com/bencyrus/chatterbox/shared/logger"
 )
 
 type RefreshResult struct {
@@ -26,29 +27,44 @@ func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders htt
 		return nil, nil
 	}
 
+	logger.Debug(ctx, "starting token refresh", logger.Fields{
+		"refresh_endpoint": cfg.PostgRESTURL + cfg.RefreshTokensPath,
+	})
+
 	payload := map[string]string{"refresh_token": refreshToken}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error(ctx, "failed to marshal refresh token payload", err)
+		return nil, err
+	}
 
 	client := &http.Client{Timeout: time.Duration(cfg.HTTPClientTimeoutSeconds) * time.Second}
 	url := cfg.PostgRESTURL + cfg.RefreshTokensPath
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
+		logger.Error(ctx, "failed to create refresh request", err)
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.Error(ctx, "refresh request failed", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
+		logger.Error(ctx, "failed to read refresh response body", readErr)
 		return nil, fmt.Errorf("failed to read refresh response body: %w", readErr)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		logger.Warn(ctx, "refresh request returned error status", logger.Fields{
+			"status_code":   resp.StatusCode,
+			"response_body": string(bodyBytes),
+		})
 		return nil, fmt.Errorf("refresh failed: status %d body: %s", resp.StatusCode, string(bodyBytes))
 	}
 
@@ -57,11 +73,14 @@ func RefreshIfPresent(ctx context.Context, cfg config.Config, requestHeaders htt
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		logger.Error(ctx, "failed to parse refresh response", err)
 		return nil, err
 	}
 	if parsed.AccessToken == "" || parsed.RefreshToken == "" {
+		logger.Error(ctx, "refresh response missing tokens", nil)
 		return nil, fmt.Errorf("refresh response missing tokens")
 	}
 
+	logger.Info(ctx, "token refresh completed successfully")
 	return &RefreshResult{AccessToken: parsed.AccessToken, RefreshToken: parsed.RefreshToken}, nil
 }
