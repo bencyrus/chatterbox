@@ -1,5 +1,5 @@
 api.glovee.io {
-    reverse_proxy postgrest:3000
+    reverse_proxy gateway:8080
 
     log {
         output stdout
