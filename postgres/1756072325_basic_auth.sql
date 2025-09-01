@@ -344,7 +344,7 @@ begin
     )
     select v.payload
     into _payload
-    from auth.verify(_token, ((cfg.c).secret), 'HS256') v, cfg
+    from cfg, auth.verify(_token, ((cfg.c).secret), 'HS256') v
     where v.valid;
 
     if _payload is null then
