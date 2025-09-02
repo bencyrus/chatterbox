@@ -1,11 +1,6 @@
 api.glovee.io {
-    # Add the UUID to both the incoming request (for logs) and the response
-    header {
-        # ensure it's present in the request seen by Caddy and logs
-        request set X-Request-ID {http.request.uuid}
-        # ensure it's present in the response
-        X-Request-ID {http.request.uuid}
-    }
+    # Add a unique UUID per request to the response headers
+    header X-Request-ID {http.request.uuid}
 
     # Forward the same UUID to the upstream service as a request header
     reverse_proxy gateway:8080 {
