@@ -11,7 +11,13 @@ api.glovee.io {
         output stdout
         format filter {
             fields {
-                uuid rename request_id
+                # Use the response header as the canonical request_id
+                resp_headers>X-Request-Id rename request_id
+                resp_headers>X-Request-ID rename request_id
+                # Drop duplicates/noise
+                uuid delete
+                request>headers>X-Request-Id delete
+                request>headers>X-Request-ID delete
             }
             wrap json
         }
