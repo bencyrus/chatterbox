@@ -9,6 +9,11 @@ api.glovee.io {
 
     log {
         output stdout
-        format json
+        format json {
+            # Override the default 'uuid' field name to 'request_id'
+            uuid request_id
+            # Optionally add the X-Request-ID header value as a field
+            request_id_header >X-Request-ID
+        }
     }
 }
