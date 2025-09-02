@@ -52,11 +52,6 @@ func InjectSignedFileURLs(ctx context.Context, cfg config.Config, body []byte) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Forward request ID to files service if available
-	if requestID, ok := ctx.Value(logger.RequestIDKey).(string); ok && requestID != "" {
-		req.Header.Set("X-Request-ID", requestID)
-	}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Error(ctx, "file service request failed", err)

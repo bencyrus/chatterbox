@@ -9,9 +9,11 @@ api.glovee.io {
 
     log {
         output stdout
-        format json {
-            # Include request ID in Caddy's access logs
-            request_id {http.request.uuid}
+        format filter {
+            fields {
+                uuid rename request_id
+            }
+            wrap json
         }
     }
 }

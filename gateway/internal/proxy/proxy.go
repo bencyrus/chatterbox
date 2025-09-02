@@ -60,11 +60,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.URL.Scheme = g.backend.Scheme
 			req.URL.Host = g.backend.Host
 			// Preserve original path and query
-			// Copy headers (Host header will be set by transport)
-
-			// Ensure X-Request-ID is forwarded to PostgREST
-			if requestID := req.Header.Get("X-Request-ID"); requestID != "" {
-				req.Header.Set("X-Request-ID", requestID)
+			// Ensure X-Request-ID is present and forwarded
+			if req.Header.Get("X-Request-ID") == "" {
+				if rid, ok := req.Context().Value(logger.RequestIDKey).(string); ok && rid != "" {
+					req.Header.Set("X-Request-ID", rid)
+				}
 			}
 		},
 		Transport: g.transport,
