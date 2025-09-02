@@ -9,9 +9,7 @@ Purpose
 Behavior
 
 - Refresh: checks expiry and presence of refresh token header; runs a preflight refresh with a short timeout. Success or failure does not block the main request; new tokens (if any) are attached to response headers.
-- File URLs: injects signed URLs when the upstream JSON includes `files`.
-  - Object responses: `{ ..., "files": [...] }` → adds `{ ..., "processed_files": [...] }`.
-  - Array responses: `[ { "files": [...] }, { ... }, ... ]` → adds `processed_files` to each object that contains `files`.
+- File URLs: if the upstream response is JSON and includes `files`, calls the files service and injects results as `processed_files` while preserving `files`.
 
 Headers
 
@@ -32,6 +30,6 @@ Flow
 
 Notes
 
-- Only processes `application/json` responses and looks for a top‑level field named by `FILES_FIELD_NAME` on objects. For top‑level arrays, each element is inspected for that field.
+- Only processes `application/json` responses with a top‑level array named by `FILES_FIELD_NAME`.
 - Designed to be fail‑safe: token refresh and file URL processing never fail the main request.
 - Code reference: [`internal/proxy`](internal/proxy), [`internal/auth`](internal/auth), [`internal/files`](internal/files).
