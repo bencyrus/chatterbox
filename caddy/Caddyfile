@@ -1,19 +1,17 @@
 api.glovee.io {
-    # Add a unique UUID per request to the response headers
+    # Attach request UUID to both response and upstream
     header X-Request-ID {http.request.uuid}
-
-    # Forward the same UUID to the upstream service as a request header
     reverse_proxy gateway:8080 {
         header_up X-Request-ID {http.request.uuid}
     }
 
     log {
         output stdout
-        format json {
-            # Override the default 'uuid' field name to 'request_id'
-            uuid request_id
-            # Optionally add the X-Request-ID header value as a field
-            request_id_header >X-Request-ID
+        format filter {
+            wrap json
+            fields {
+                request>id replace {http.request.uuid}
+            }
         }
     }
 }
