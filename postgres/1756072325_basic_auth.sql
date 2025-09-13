@@ -47,6 +47,13 @@ create table if not exists auth.account (
     constraint hashed_password_nonempty check (auth.is_password_valid(hashed_password))
 );
 
+-- usage log for account logins
+create table auth.account_login (
+    account_login_id bigserial primary key,
+    account_id bigint not null references auth.account(account_id) on delete cascade,
+    logged_in_at timestamp with time zone not null default now()
+);
+
 create domain auth.token_use as text
     check (value in ('access', 'refresh'));
 
@@ -311,6 +318,10 @@ begin
             using detail = 'Invalid Credentials',
                   hint = 'bad_password';
     end if;
+
+    -- record successful login
+    insert into auth.account_login (account_id)
+    values (_account.account_id);
 
     _access_token := auth.create_access_token(_account.account_id);
     _refresh_token := auth.create_refresh_token(_account.account_id);
