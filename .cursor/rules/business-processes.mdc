@@ -1,0 +1,32 @@
+---
+description: Business process orchestration via supervisors and a minimal worker
+globs:
+  - docs/worker.md
+  - postgres/**/*.sql
+alwaysApply: true
+---
+
+- Prefer implementing business processes as supervisor-driven workflows in the database:
+
+  - Use a supervisor db function per process to orchestrate steps based on append-only facts.
+  - Supervisors enqueue child tasks (e.g., email, sms) and may re-enqueue themselves to check progress.
+  - Keep processes idempotent; derive state from facts and uniqueness constraints.
+
+- Keep the Go worker minimal:
+
+  - Lease tasks and dispatch to database via a single security-definer runner (e.g., `internal.run_function(name, payload)`), not per-function grants.
+  - Worker never enqueues; all scheduling is done by supervisors/handlers in the db.
+  - Record operational errors to an append-only `queues.error` table.
+
+- Payload conventions:
+
+  - Use a single resource identifier in task payloads (e.g., `send_email_task_id`).
+  - For channel tasks, provide handler names in payload: `before_handler`, `success_handler`, `error_handler`.
+
+- Permissions and safety:
+
+  - Grant the worker role minimal privileges: `queues.dequeue_available_task` and the function runner only.
+  - Optionally switch the runner to security invoker and mark allowed business functions as security definer with targeted grants for finer control.
+
+- Notes:
+  - Some tasks can be executed fully in the worker while the frontend polls for results; use controlled polling or long-lived connections when appropriate.

@@ -1,25 +1,20 @@
 ---
-description: SQL style, generic schema exposure, validation, and PostgREST conventions
+description: SQL style guidelines
 globs:
   - postgres/**/*.sql
 alwaysApply: true
 ---
 
 - Use lowercase SQL keywords and snake_case identifiers.
-- Schemas are plural nouns (e.g., queues, comms, auth); only `api` and `service_api` are exposed via PostgREST; all others are internal.
-- Public/API functions (in `api`/`service_api`) return jsonb and raise exceptions on validation failure using detail + hint.
-- Internal functions do not raise exceptions; they return composites with a `validation_failure_message` field (null on success).
+- Schemas are plural nouns (e.g., queues, comms, auth).
 - DDL/data design: follow normalization; prefer append-only; avoid deletes/updates; derive state from recorded facts.
-- Keep response payloads minimal; avoid returning full row types unless necessary.
 - Use domains for small enumerations; keep names descriptive and consistent.
 - Add a one-line comment above each table/type/function stating purpose.
-- PostgREST schema selection: Use `Accept-Profile` for GET/HEAD and `Content-Profile` for other methods/RPC; see [PostgREST Schemas](https://docs.postgrest.org/en/v12/references/api/schemas.html).
-- API key validation is enforced centrally (pre-request + assert function) and should not be re-implemented in individual functions.
 
 - Prefer multi-line SQL for readability:
   - Put major clauses on separate lines: `select`, `from`, `join`, `where`, `group by`, `having`, `order by`, `limit`, `returning`.
   - Vertically list selected columns/expressions one per line under `select` (no trailing comma on the last item).
   - Single-item lists may remain inline with the directive: e.g., `select expr`, `order by expr`, `returning expr`.
-  - In PL/pgSQL, place `into` on its own line immediately after the `select` list.
+  - In plpgsql, place `into` on its own line immediately after the `select` list.
   - For `insert`, place the column list on one line (or wrapped), `values` on a new line, and `returning` on a new line; put `into` on its own line when capturing.
-  - Wrap subqueries and `exists (...)` predicates, with their inner `select ... from ... where ...` split across lines per these rules.
+  - Wrap subqueries and `exists(...)` predicates, with their inner `select ... from ... where ...` split across lines per these rules.
