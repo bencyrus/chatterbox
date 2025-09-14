@@ -44,7 +44,7 @@ Shape of the security-definer runner that validates and dispatches calls:
 
 ## Payload contracts
 
-Supervisor task payload ( db function ) — prefer a single resource identifier:
+Supervisor task payload (db function) — prefer a single resource identifier:
 
 ```json
 {
@@ -54,7 +54,7 @@ Supervisor task payload ( db function ) — prefer a single resource identifier:
 }
 ```
 
-Business task payloads ( email, sms, etc. ) — also reference the same single id:
+Business task payloads (email, sms, etc.) — also reference the same single id:
 
 ```json
 {
@@ -66,7 +66,7 @@ Business task payloads ( email, sms, etc. ) — also reference the same single i
 }
 ```
 
-## Worker lifecycle ( high-level )
+## Worker lifecycle (high-level)
 
 Pseudo-code for the Go worker loop that processes available tasks:
 
@@ -113,7 +113,7 @@ Notes:
 - Use `select ... for update skip locked` semantics to prevent duplicate processing under concurrency.
 - The worker never enqueues tasks; supervisors/handlers (in db) perform scheduling and re-enqueueing as needed.
 
-## Supervisor orchestration ( email example )
+## Supervisor orchestration (email example)
 
 ```pseudo
 -- comms.email_send_supervisor(payload jsonb)
@@ -168,3 +168,44 @@ return
 - Ensure grants are scoped to service roles; avoid broad `public` execute on internal functions.
 - Security variation: For finer granularity, keep `internal.run_function` but make it security invoker (no privilege escalation). Then mark each target business function as security definer and grant `execute` only to `worker_service_user` for the specific allowed functions. This preserves the wrapper call contract while moving authorization to per-function grants and definer contexts.
 - For certain tasks, you can run work fully in the worker and let the frontend poll for results via a controlled polling endpoint or long-lived connection.
+
+## Example Flow: Send Email Task
+
+This is a concrete, step-by-step story of a single email being sent with Resend as the provider. The process allows one retry.
+
+1. Kickoff
+
+- App creates an email message and a `send_email_task` with id X.
+- A supervisor task is enqueued with payload `{ task_type: 'db_function', db_function: 'comms.email_send_supervisor', send_email_task_id: X }`.
+
+2. Supervisor run #1
+
+- Worker takes on the supervisor task and invokes the function.
+- Supervisor reads facts for X: no success, no failure, not started.
+- Supervisor enqueues one email task now with handlers `{ before_handler: 'comms.get_email_payload', success_handler: 'comms.record_email_success', error_handler: 'comms.record_email_failure' }`.
+- Supervisor also enqueues itself to run again in a few seconds.
+
+3. Email attempt #1 (failure)
+
+- Worker takes the email task.
+- Worker runs the before handler to build the provider payload and calls Resend.
+- Provider call fails; worker appends `queues.error` and calls the error handler, which records a failure fact for X.
+
+4. Supervisor run #2
+
+- Worker takes the supervisor task again.
+- Supervisor reads facts for X: failure exists, retry still allowed.
+- Supervisor enqueues a second email task now with the same handlers.
+- Supervisor enqueues itself to run again shortly.
+
+5. Email attempt #2 (success)
+
+- Worker takes the second email task.
+- Worker runs the before handler and calls Resend.
+- Provider call succeeds; worker calls the success handler, which records a success fact for X.
+
+6. Supervisor run #3 (terminal)
+
+- Worker teakes the supervisor task.
+- Supervisor reads facts for X: success fact exists.
+- Supervisor terminates; no further tasks are enqueued.
