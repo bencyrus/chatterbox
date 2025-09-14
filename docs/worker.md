@@ -11,7 +11,7 @@ This document describes the internal queues/worker system, the supervisor orches
 - **supervisor**: a db function that orchestrates a business process using facts. It enqueues child tasks, decides if/when to re-enqueue itself, and terminates when a terminal fact exists or limits are reached.
 - **facts (append-only)**: internal business process tables are append-only. Derive state from the latest facts; avoid updates/deletes. Enforce uniqueness to guarantee at-most-once per logical event.
 - **business process**: an orchestrated domain workflow (e.g., send email/sms) managed by a supervisor function. It records progress via append-only facts, enqueues child tasks (e.g., email, sms, itself), and terminates when a terminal fact exists or retry/run limits are met. Code remains idempotent and stateless; all state lives in the db and retrieved using facts functions. Kickoff typically inserts a new `queues.task` record to enqueue the supervisor.
-- **function runner**: a single security-definer function that accepts a function name and a jsonb payload, validates it against an allowlist, and invokes the target internal function. The worker only has execute on this runner and never on individual business functions.
+- **function runner**: a thin wrapper that accepts a function name and a jsonb payload and invokes the target internal function. The runner is security invoker; target business functions are security definer with explicit per-function grants to the worker role.
 
 ## Worker database user and permissions
 
@@ -19,18 +19,17 @@ This document describes the internal queues/worker system, the supervisor orches
 - Grants should be narrowly scoped:
   - usage on required schemas (e.g., `queues`)
   - execute on `queues.dequeue_available_task`
-  - execute on a single security-definer runner function (e.g., `internal.run_function(function_name text, payload jsonb) returns jsonb`)
-- The runner function maintains the allowlist of callable internal functions (supervisors, handlers, payload builders) and executes them on behalf of the worker.
-- The worker does not have direct `execute` on individual internal functions.
-- Avoid direct table privileges; the worker interacts via `queues` functions and the runner only.
+  - execute on `internal.run_function(function_name text, payload jsonb) returns jsonb` (security invoker)
+  - execute on allowed business functions individually (security definer) such as supervisors and handlers
+- Avoid direct table privileges; the worker interacts via `queues` functions and the business functions only.
 
 ### Function runner (pattern)
 
-Shape of the security-definer runner that validates and dispatches calls:
+Shape of the security-invoker runner that dispatches calls (relies on per-function grants):
 
 ```sql
 -- internal.run_function(function_name text, payload jsonb) returns jsonb
--- security definer; validates function_name against an allowlist; executes target and returns jsonb
+-- security invoker; executes target and returns jsonb; authorization via per-function grants
 ```
 
 ## Data model (internal)
@@ -41,6 +40,14 @@ Shape of the security-definer runner that validates and dispatches calls:
 - `comms.email_message`, `comms.sms_message`: channel-specific payload data.
 - `comms.email_send_attempt`, `comms.sms_send_attempt`: root attempts per logical send.
 - `comms.email_attempt_started/succeeded/failed`, `comms.sms_attempt_started/succeeded/failed`: facts that track progress and outcomes.
+- Facts tables per process (email/sms): `..._succeeded`, `..._failed`. Primary key is the process task id (also a foreign key to the root task table). We do not store separate surrogate ids.
+
+### Retry derivation (no started/retried facts)
+
+- First enqueue and retries are derived, not stored. For example, allowing one retry for email is computed as follows:
+  - If no email task has been enqueued for the `send_email_task_id`: enqueue the first email task.
+  - If exactly one email task has been enqueued and a failure fact exists: enqueue one more email task.
+  - Otherwise, do not enqueue additional email tasks. Terminate when success exists or retry limit is reached.
 
 ## Payload contracts
 
@@ -166,7 +173,7 @@ return
 ## Notes
 
 - Ensure grants are scoped to service roles; avoid broad `public` execute on internal functions.
-- Security variation: For finer granularity, keep `internal.run_function` but make it security invoker (no privilege escalation). Then mark each target business function as security definer and grant `execute` only to `worker_service_user` for the specific allowed functions. This preserves the wrapper call contract while moving authorization to per-function grants and definer contexts.
+- Security variation: For finer granularity, keep `internal.run_function` as security invoker and grant execute only on specific business functions (security definer) to `worker_service_user`.
 - For certain tasks, you can run work fully in the worker and let the frontend poll for results via a controlled polling endpoint or long-lived connection.
 
 ## Example Flow: Send Email Task
