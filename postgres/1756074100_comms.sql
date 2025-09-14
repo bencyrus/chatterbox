@@ -53,8 +53,8 @@ create table comms.sms_template (
     constraint sms_template_unique_key unique (template_key)
 );
 
--- Apply ${var} substitution using only keys declared by the template (allowed_keys)
-create or replace function comms.apply_template_params(
+-- Generate message body from template by applying ${var} substitution using allowed_keys
+create or replace function comms.generate_message_body_from_template(
     _template_text text,
     _params jsonb,
     _allowed_keys text[]
@@ -160,6 +160,7 @@ begin
     values ('sms')
     returning message_id
     into _message_id;
+
     insert into comms.sms_message (message_id, to_number, body)
     values (_message_id, _to_number, _body);
     return (null, _message_id)::comms.create_sms_message_result;
@@ -204,122 +205,6 @@ as $$
         from comms.sms_message sm
         where sm.message_id = _message_id
     ) payload;
-$$;
-
--- generic result for internal enqueue helpers
-create type comms.enqueue_job_result as (
-    validation_failure_message text,
-    job queues.job
-);
-
--- create email message and enqueue job
-create or replace function comms.create_and_enqueue_email(
-    _from_address text,
-    _to_address text,
-    _subject text,
-    _html text,
-    _priority integer default 1,
-    _num_max_attempts integer default 5,
-    _scheduled_at timestamp with time zone default now()
-)
-returns comms.enqueue_job_result
-language plpgsql
-security definer
-as $$
-declare
-    _message_id bigint;
-    _created_job queues.job;
-    _create_email_result comms.create_email_message_result;
-begin
-    select comms.create_email_message(_from_address, _to_address, _subject, _html)
-    into _create_email_result;
-    if _create_email_result.validation_failure_message is not null then
-        return (_create_email_result.validation_failure_message, null)::comms.enqueue_job_result;
-    end if;
-
-    _message_id := _create_email_result.message_id;
-    select queues.enqueue('email', _message_id, _priority, _num_max_attempts, _scheduled_at)
-    into _created_job;
-    return (null, _created_job)::comms.enqueue_job_result;
-end;
-$$;
-
--- create sms message and enqueue job
-create or replace function comms.create_and_enqueue_sms(
-    _to_number text,
-    _body text,
-    _priority integer default 1,
-    _num_max_attempts integer default 5,
-    _scheduled_at timestamp with time zone default now()
-)
-returns comms.enqueue_job_result
-language plpgsql
-security definer
-as $$
-declare
-    _message_id bigint;
-    _created_job queues.job;
-    _create_sms_result comms.create_sms_message_result;
-begin
-    select comms.create_sms_message(_to_number, _body)
-    into _create_sms_result;
-    if _create_sms_result.validation_failure_message is not null then
-        return (_create_sms_result.validation_failure_message, null)::comms.enqueue_job_result;
-    end if;
-
-    _message_id := _create_sms_result.message_id;
-    select queues.enqueue('sms', _message_id, _priority, _num_max_attempts, _scheduled_at)
-    into _created_job;
-    return (null, _created_job)::comms.enqueue_job_result;
-end;
-$$;
-
--- service fetch_next_task response type
-create type service_api.fetch_next_task_response as (
-    job jsonb
-);
-
--- lease next ready job and return job with payload
-create or replace function service_api.fetch_next_task(
-    worker_id text,
-    lease_seconds integer default 60,
-    task_type queues.task_type default null
-)
-returns jsonb
-language plpgsql
-security definer
-as $$
-declare
-    _next_ready_job queues.lease_next_ready_job_result;
-    _dequeued_job queues.dequeued_job;
-    _payload_json jsonb := '{}'::jsonb;
-    _response_json service_api.fetch_next_task_response;
-begin
-    select queues.lease_next_ready_job(worker_id, lease_seconds, task_type)
-    into _next_ready_job;
-    if _next_ready_job.validation_failure_message is not null then
-        raise exception 'Fetch Next Task Failed'
-            using detail = 'Invalid Request',
-                  hint = _next_ready_job.validation_failure_message;
-    end if;
-    
-    _dequeued_job := _next_ready_job.job;
-    if _dequeued_job.job_id is null then
-        _response_json := (null);
-        return to_jsonb(_response_json);
-    end if;
-
-    if _dequeued_job.task_type = 'email' then
-        _payload_json := jsonb_build_object('payload', comms.get_email_payload(_dequeued_job.resource_id));
-    elsif _dequeued_job.task_type = 'sms' then
-        _payload_json := jsonb_build_object('payload', comms.get_sms_payload(_dequeued_job.resource_id));
-    end if;
-
-    _response_json := (
-        to_jsonb(_dequeued_job) || _payload_json
-    );
-    return to_jsonb(_response_json);
-end;
 $$;
 
 commit;
