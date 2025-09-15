@@ -551,6 +551,327 @@ grant execute on function comms.record_email_success(jsonb) to worker_service_us
 grant execute on function comms.record_email_failure(jsonb) to worker_service_user;
 grant execute on function comms.send_email_supervisor(jsonb) to worker_service_user;
 
+-- facts: has the send_sms_task succeeded?
+create or replace function comms.has_send_sms_task_succeeded(
+    _send_sms_task_id bigint
+)
+returns boolean
+language sql
+stable
+as $$
+    select exists (
+        select 1
+        from comms.send_sms_task_succeeded s
+        where s.send_sms_task_id = _send_sms_task_id
+    );
+$$;
+
+-- facts: count failures for send_sms_task
+create or replace function comms.count_send_sms_task_failures(
+    _send_sms_task_id bigint
+)
+returns integer
+language sql
+stable
+as $$
+    select count(*)::integer
+    from comms.send_sms_task_failed f
+    where f.send_sms_task_id = _send_sms_task_id;
+$$;
+
+-- before handler: build provider payload from send_sms_task_id in payload
+create or replace function comms.get_sms_payload(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+as $$
+declare
+    _send_sms_task_id bigint := (payload->>'send_sms_task_id')::bigint;
+    _message_id bigint;
+    _result jsonb;
+begin
+    -- validation
+    if _send_sms_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_sms_task_id'
+        );
+    end if;
+
+    -- facts
+    select sst.message_id
+    into _message_id
+    from comms.send_sms_task sst
+    where sst.send_sms_task_id = _send_sms_task_id;
+
+    if _message_id is null then
+        return jsonb_build_object(
+            'error', 'task_not_found'
+        );
+    end if;
+
+    -- compute
+    select to_jsonb(sms_payload)
+    into _result
+    from (
+        select 
+            sm.message_id,
+            sm.to_number,
+            sm.body
+        from comms.sms_message sm
+        where sm.message_id = _message_id
+    ) sms_payload;
+
+    -- output
+    if _result is null then
+        return jsonb_build_object(
+            'error', 'payload_not_found'
+        );
+    end if;
+
+    return jsonb_build_object(
+        'success', true,
+        'payload', _result
+    );
+end;
+$$;
+
+-- success handler: record success fact
+create or replace function comms.record_sms_success(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_task_id bigint := coalesce((
+        payload->'original_payload'->>'send_sms_task_id'
+    )::bigint, (
+        payload->>'send_sms_task_id'
+    )::bigint);
+begin
+    -- validation
+    if _send_sms_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_sms_task_id'
+        );
+    end if;
+
+    -- output
+    insert into comms.send_sms_task_succeeded (send_sms_task_id)
+    values (_send_sms_task_id)
+    on conflict (send_sms_task_id) do nothing;
+
+    return jsonb_build_object(
+        'success', true
+    );
+end;
+$$;
+
+-- error handler: record failure fact
+create or replace function comms.record_sms_failure(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_task_id bigint := coalesce((
+        payload->'original_payload'->>'send_sms_task_id'
+    )::bigint, (
+        payload->>'send_sms_task_id'
+    )::bigint);
+    _error_message text := (payload->>'error')::text;
+begin
+    -- validation
+    if _send_sms_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_sms_task_id'
+        );
+    end if;
+
+    -- output
+    insert into comms.send_sms_task_failed (send_sms_task_id, error_message)
+    values (_send_sms_task_id, _error_message)
+    on conflict (send_sms_task_id) do nothing;
+
+    return jsonb_build_object(
+        'success', true
+    );
+end;
+$$;
+
+-- supervisor: orchestrates sms sending using append-only facts
+create or replace function comms.send_sms_supervisor(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_task_id bigint := (payload->>'send_sms_task_id')::bigint;
+    _has_success boolean;
+    _num_failures integer;
+    _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
+    _base_delay_seconds integer := 5;
+    _next_check_at timestamptz;
+begin
+    -- validation
+    if _send_sms_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_sms_task_id'
+        );
+    end if;
+
+    -- facts
+    select comms.has_send_sms_task_succeeded(_send_sms_task_id)
+    into _has_success;
+    
+    if _has_success then
+        return jsonb_build_object(
+            'success', true
+        );
+    end if;
+
+    select comms.count_send_sms_task_failures(_send_sms_task_id)
+    into _num_failures;
+
+    if _num_failures >= _max_attempts then
+        return jsonb_build_object(
+            'success', true
+        );
+    end if;
+
+    -- compute
+    -- next check at exponential backoff based on failures
+    _next_check_at := (
+        now() +
+        ((_base_delay_seconds)::double precision * power(2, _num_failures)) *
+        interval '1 second'
+    );
+
+    perform queues.enqueue(
+        'sms',
+        jsonb_build_object(
+            'task_type', 'sms',
+            'send_sms_task_id', _send_sms_task_id,
+            'before_handler', 'comms.get_sms_payload',
+            'success_handler', 'comms.record_sms_success',
+            'error_handler', 'comms.record_sms_failure'
+        ),
+        now()
+    );
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'comms.send_sms_supervisor',
+            'send_sms_task_id', _send_sms_task_id
+        ),
+        _next_check_at
+    );
+
+    return jsonb_build_object(
+        'success', true
+    );
+end;
+$$;
+
+create type comms.kickoff_send_sms_task_result as (
+    validation_failure_message text
+);
+
+-- kickoff: create send_sms_task and enqueue supervisor
+create or replace function comms.kickoff_send_sms_task(
+    _message_id bigint,
+    _scheduled_at timestamp with time zone default now()
+)
+returns comms.kickoff_send_sms_task_result
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_task_id bigint;
+begin
+    -- validation
+    if _message_id is null then
+        return ('missing_message_id')::comms.kickoff_send_sms_task_result;
+    end if;
+
+    if not comms.message_exists(_message_id) then
+        return ('message_not_found')::comms.kickoff_send_sms_task_result;
+    end if;
+
+    -- output
+    insert into comms.send_sms_task (message_id)
+    values (_message_id)
+    returning send_sms_task_id
+    into _send_sms_task_id;
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'comms.send_sms_supervisor',
+            'send_sms_task_id', _send_sms_task_id
+        ),
+        _scheduled_at
+    );
+
+    return (null)::comms.kickoff_send_sms_task_result;
+end;
+$$;
+
+-- result of creating and kicking off an sms task
+create type comms.create_and_kickoff_sms_task_result as (
+    validation_failure_message text
+);
+
+-- create sms message and kickoff send_sms_task
+create or replace function comms.create_and_kickoff_sms_task(
+    _to_number text,
+    _body text,
+    _scheduled_at timestamp with time zone default now()
+)
+returns comms.create_and_kickoff_sms_task_result
+language plpgsql
+security definer
+as $$
+declare
+    _create_sms_result comms.create_sms_message_result;
+    _kickoff_result comms.kickoff_send_sms_task_result;
+begin
+    select comms.create_sms_message(_to_number, _body)
+    into _create_sms_result;
+
+    if _create_sms_result.validation_failure_message is not null then
+        return (_create_sms_result.validation_failure_message)::comms.create_and_kickoff_sms_task_result;
+    end if;
+
+    select comms.kickoff_send_sms_task(_create_sms_result.message_id, _scheduled_at)
+    into _kickoff_result;
+
+    if _kickoff_result.validation_failure_message is not null then
+        return (_kickoff_result.validation_failure_message)::comms.create_and_kickoff_sms_task_result;
+    end if;
+
+    return (null)::comms.create_and_kickoff_sms_task_result;
+end;
+$$;
+
+-- per-function grants to worker_service_user (sms)
+grant execute on function comms.kickoff_send_sms_task(bigint, timestamp with time zone) to worker_service_user;
+grant execute on function comms.get_sms_payload(jsonb) to worker_service_user;
+grant execute on function comms.record_sms_success(jsonb) to worker_service_user;
+grant execute on function comms.record_sms_failure(jsonb) to worker_service_user;
+grant execute on function comms.send_sms_supervisor(jsonb) to worker_service_user;
+
 commit;
 
 
