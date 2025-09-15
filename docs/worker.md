@@ -42,12 +42,13 @@ Shape of the security-invoker runner that dispatches calls (relies on per-functi
 - `comms.email_attempt_started/succeeded/failed`, `comms.sms_attempt_started/succeeded/failed`: facts that track progress and outcomes.
 - Facts tables per process (email/sms): `..._succeeded`, `..._failed`. Primary key is the process task id (also a foreign key to the root task table). We do not store separate surrogate ids.
 
-### Retry derivation (no started/retried facts)
+### Retry derivation (ICO: input, compute, output)
 
-- First enqueue and retries are derived, not stored. For example, allowing one retry for email is computed as follows:
-  - If no email task has been enqueued for the `send_email_task_id`: enqueue the first email task.
-  - If exactly one email task has been enqueued and a failure fact exists: enqueue one more email task.
-  - Otherwise, do not enqueue additional email tasks. Terminate when success exists or retry limit is reached.
+- Prefer small facts functions (input) over inline queries and avoid relying on `queues.task` for decision counts.
+- Example facts functions for email:
+  - `comms.has_send_email_task_succeeded(send_email_task_id) returns boolean`
+  - `comms.count_send_email_task_failures(send_email_task_id) returns integer`
+- Compute stage uses these facts with a local `_max_attempts` to decide whether to enqueue the channel task and/or the supervisor. Output stage enqueues accordingly.
 
 ## Payload contracts
 
@@ -134,26 +135,17 @@ if success_fact exists for payload.send_email_task_id:
 if failure_fact exists for payload.send_email_task_id and not retries_remaining(facts):
   return
 
-# 2) decide if we need to enqueue the channel task, and for when
-if started_fact not exists for payload.send_email_task_id or (failure_fact exists for payload.send_email_task_id and retries_remaining(facts)):
-  enqueue queues.task:
-    task_type: 'email'
-    payload:
-      send_email_task_id
-      before_handler: 'comms.get_email_payload'
-      success_handler: 'comms.record_email_success'
-      error_handler: 'comms.record_email_failure'
-    scheduled_at: now()
+# 2) input: read facts
+has_success := comms.has_send_email_task_succeeded(X)
+num_failures := comms.count_send_email_task_failures(X)
+max_attempts := 2  # one retry
 
-# 3) decide if we need to enqueue the supervisor again, and for when
-next_check_at := compute_next_check_time(facts)
-if next_check_at is not null:
-  enqueue queues.task:
-    task_type: 'db_function'
-    payload:
-      db_function: 'comms.email_send_supervisor'
-      send_email_task_id
-    scheduled_at: next_check_at
+# 3) compute + output
+if not has_success and num_failures < max_attempts:
+  enqueue queues.task email now with handlers
+
+# 4) schedule supervisor again
+enqueue supervisor again after small delay if not terminal
 
 return
 ```
