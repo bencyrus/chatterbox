@@ -18,7 +18,7 @@ This document describes the internal queues/worker system, the supervisor orches
 - The worker connects using a dedicated database role (for example, `worker_service_user`) with minimal privileges.
 - Grants should be narrowly scoped:
   - usage on required schemas (e.g., `queues`)
-  - execute on `queues.dequeue_available_task`
+  - execute on `queues.dequeue_next_available_task`
   - execute on `internal.run_function(function_name text, payload jsonb) returns jsonb` (security invoker)
   - execute on allowed business functions individually (security definer) such as supervisors and handlers
 - Avoid direct table privileges; the worker interacts via `queues` functions and the business functions only.
@@ -38,8 +38,8 @@ Shape of the security-invoker runner that dispatches calls (relies on per-functi
 - `queues.error`: append-only record of worker/handler errors for observability.
 - `comms.message`: base comms record with `channel in ('email','sms')`.
 - `comms.email_message`, `comms.sms_message`: channel-specific payload data.
-- `comms.email_send_attempt`, `comms.sms_send_attempt`: root attempts per logical send.
-- `comms.email_attempt_started/succeeded/failed`, `comms.sms_attempt_started/succeeded/failed`: facts that track progress and outcomes.
+- `comms.send_email_task`, `comms.send_sms_task`: root tasks per logical send.
+- `comms.send_email_task_succeeded/failed`, `comms.send_sms_task_succeeded/failed`: facts that track outcomes.
 - Facts tables per process (email/sms): `..._succeeded`, `..._failed`. Primary key is the process task id (also a foreign key to the root task table). We do not store separate surrogate ids.
 
 ### Retry derivation (ICO: input, compute, output)
@@ -57,7 +57,7 @@ Supervisor task payload (db function) — prefer a single resource identifier:
 ```json
 {
   "task_type": "db_function",
-  "db_function": "comms.email_send_supervisor",
+  "db_function": "comms.send_email_supervisor",
   "send_email_task_id": 123
 }
 ```
@@ -124,7 +124,7 @@ Notes:
 ## Supervisor orchestration (email example)
 
 ```pseudo
--- comms.email_send_supervisor(payload jsonb)
+-- comms.send_email_supervisor(payload jsonb)
 -- payload: { send_email_task_id }
 
 facts := read_current_facts_for(payload.send_email_task_id)
@@ -175,12 +175,12 @@ This is a concrete, step-by-step story of a single email being sent with Resend 
 1. Kickoff
 
 - App creates an email message and a `send_email_task` with id X.
-- A supervisor task is enqueued with payload `{ task_type: 'db_function', db_function: 'comms.email_send_supervisor', send_email_task_id: X }`.
+- A supervisor task is enqueued with payload `{ task_type: 'db_function', db_function: 'comms.send_email_supervisor', send_email_task_id: X }`.
 
 2. Supervisor run #1
 
 - Worker takes on the supervisor task and invokes the function.
-- Supervisor reads facts for X: no success, no failure, not started.
+- Supervisor reads facts for X: no success, no failure.
 - Supervisor enqueues one email task now with handlers `{ before_handler: 'comms.get_email_payload', success_handler: 'comms.record_email_success', error_handler: 'comms.record_email_failure' }`.
 - Supervisor also enqueues itself to run again in a few seconds.
 
@@ -205,6 +205,6 @@ This is a concrete, step-by-step story of a single email being sent with Resend 
 
 6. Supervisor run #3 (terminal)
 
-- Worker teakes the supervisor task.
+- Worker takes the supervisor task.
 - Supervisor reads facts for X: success fact exists.
 - Supervisor terminates; no further tasks are enqueued.
