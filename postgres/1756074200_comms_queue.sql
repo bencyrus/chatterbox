@@ -1,5 +1,191 @@
 begin;
 
+-- base comms schema and functions
+
+-- comms schema
+create schema comms;
+
+-- domain for communication channel kinds
+create domain comms.channel as text
+    check (value in ('email', 'sms'));
+
+-- base message table
+create table comms.message (
+    message_id bigserial primary key,
+    channel comms.channel not null,
+    created_at timestamp with time zone not null default now()
+);
+
+-- email payload table
+create table comms.email_message (
+    message_id bigint primary key references comms.message(message_id) on delete cascade,
+    from_address text not null,
+    to_address text not null,
+    subject text not null,
+    html text not null
+);
+
+-- sms payload table
+create table comms.sms_message (
+    message_id bigint primary key references comms.message(message_id) on delete cascade,
+    to_number text not null,
+    body text not null
+);
+
+-- email templates
+create table comms.email_template (
+    email_template_id bigserial primary key,
+    template_key text not null,
+    subject text not null,
+    body text not null,
+    body_params text[],
+    description text,
+    created_at timestamp with time zone not null default now(),
+    constraint email_template_unique_key unique (template_key)
+);
+
+-- sms templates
+create table comms.sms_template (
+    sms_template_id bigserial primary key,
+    template_key text not null,
+    body text not null,
+    body_params text[],
+    description text,
+    created_at timestamp with time zone not null default now(),
+    constraint sms_template_unique_key unique (template_key)
+);
+
+-- Generate message body from template by applying ${var} substitution using allowed_keys
+create or replace function comms.generate_message_body_from_template(
+    _template_text text,
+    _params jsonb,
+    _allowed_keys text[]
+)
+returns text
+language plpgsql
+stable
+as $$
+declare
+    _param_key text;
+    _replacement_value text;
+    _result_text text := coalesce(_template_text, '');
+begin
+    if _allowed_keys is null or array_length(_allowed_keys, 1) is null then
+        return _result_text;
+    end if;
+
+    foreach _param_key in array _allowed_keys loop
+        if _params ? _param_key then
+            _replacement_value := _params->>_param_key;
+            _result_text := regexp_replace(
+                _result_text,
+                '\$\{' || regexp_replace(_param_key, '([\\.^$|?*+()\[\]{}])', '\\1', 'g') || '\}',
+                _replacement_value,
+                'g'
+            );
+        end if;
+    end loop;
+    return _result_text;
+end;
+$$;
+
+-- result of creating an email message
+create type comms.create_email_message_result as (
+    validation_failure_message text,
+    message_id bigint
+);
+
+-- create an email message with validation
+create or replace function comms.create_email_message(
+    _from_address text,
+    _to_address text,
+    _subject text,
+    _html text
+)
+returns comms.create_email_message_result
+language plpgsql
+security definer
+as $$
+declare
+    _message_id bigint;
+begin
+    if _from_address is null then
+        return ('from_address_missing', null)::comms.create_email_message_result;
+    end if;
+    if _to_address is null then
+        return ('to_address_missing', null)::comms.create_email_message_result;
+    end if;
+    if _subject is null then
+        return ('subject_missing', null)::comms.create_email_message_result;
+    end if;
+    if _html is null then
+        return ('html_missing', null)::comms.create_email_message_result;
+    end if;
+
+    insert into comms.message (channel)
+    values ('email')
+    returning message_id
+    into _message_id;
+    
+    insert into comms.email_message (message_id, from_address, to_address, subject, html)
+    values (_message_id, _from_address, _to_address, _subject, _html);
+    return (null, _message_id)::comms.create_email_message_result;
+end;
+$$;
+
+-- result of creating an sms message
+create type comms.create_sms_message_result as (
+    validation_failure_message text,
+    message_id bigint
+);
+
+-- create an sms message with validation
+create or replace function comms.create_sms_message(
+    _to_number text,
+    _body text
+)
+returns comms.create_sms_message_result
+language plpgsql
+security definer
+as $$
+declare
+    _message_id bigint;
+begin
+    if _to_number is null then
+        return ('to_number_missing', null)::comms.create_sms_message_result;
+    end if;
+    if _body is null then
+        return ('body_missing', null)::comms.create_sms_message_result;
+    end if;
+
+    insert into comms.message (channel)
+    values ('sms')
+    returning message_id
+    into _message_id;
+
+    insert into comms.sms_message (message_id, to_number, body)
+    values (_message_id, _to_number, _body);
+    return (null, _message_id)::comms.create_sms_message_result;
+end;
+$$;
+
+create or replace function comms.message_exists(
+    _message_id bigint
+)
+returns boolean
+language sql
+stable
+as $$
+    select exists (
+        select 1
+        from comms.message m
+        where m.message_id = _message_id
+    );
+$$;
+
+
+-- comms queue schemas and functions
+
 -- send email process: tasks and facts (append-only)
 create table comms.send_email_task (
     send_email_task_id bigserial primary key,
@@ -16,6 +202,7 @@ create table comms.send_email_task_succeeded (
 -- failure facts (append-only, one per failed attempt)
 create table comms.send_email_task_failed (
     send_email_task_id bigint primary key references comms.send_email_task(send_email_task_id) on delete cascade,
+    error_message text,
     created_at timestamp with time zone not null default now()
 );
 
@@ -35,102 +222,270 @@ create table comms.send_sms_task_succeeded (
 -- failure facts (append-only, one per failed attempt)
 create table comms.send_sms_task_failed (
     send_sms_task_id bigint primary key references comms.send_sms_task(send_sms_task_id) on delete cascade,
+    error_message text,
     created_at timestamp with time zone not null default now()
 );
 
--- supervisor: orchestrates email sending using append-only facts
-create or replace function comms.send_email_supervisor(
-    _payload jsonb
+-- facts: has the send_email_task succeeded?
+create or replace function comms.has_send_email_task_succeeded(
+    _send_email_task_id bigint
+)
+returns boolean
+language sql
+stable
+as $$
+    select exists (
+        select 1
+        from comms.send_email_task_succeeded s
+        where s.send_email_task_id = _send_email_task_id
+    );
+$$;
+
+-- facts: count failures for send_email_task
+create or replace function comms.count_send_email_task_failures(
+    _send_email_task_id bigint
+)
+returns integer
+language sql
+stable
+as $$
+    select count(*)::integer
+    from comms.send_email_task_failed f
+    where f.send_email_task_id = _send_email_task_id;
+$$;
+
+-- before handler: build provider payload from send_email_task_id in payload
+create or replace function comms.get_email_payload(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+as $$
+declare
+    _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
+    _message_id bigint;
+    _result jsonb;
+begin
+    -- validation
+    if _send_email_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_email_task_id'
+        );
+    end if;
+
+    -- facts
+    select set.message_id
+    into _message_id
+    from comms.send_email_task set
+    where set.send_email_task_id = _send_email_task_id;
+
+    if _message_id is null then
+        return jsonb_build_object(
+            'error', 'task_not_found'
+        );
+    end if;
+
+    -- compute
+    select to_jsonb(email_payload)
+    into _result
+    from (
+        select 
+            em.message_id,
+            em.from_address,
+            em.to_address,
+            em.subject,
+            em.html
+        from comms.email_message em
+        where em.message_id = _message_id
+    ) email_payload;
+
+    -- output
+    if _result is null then
+        return jsonb_build_object(
+            'error', 'payload_not_found'
+        );
+    end if;
+
+    return jsonb_build_object(
+        'success', true,
+        'payload', _result
+    );
+end;
+$$;
+
+-- success handler: record success fact
+create or replace function comms.record_email_success(
+    payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_email_task_id bigint := (_payload->>'send_email_task_id')::bigint;
-    _has_success boolean;
-    _has_failed boolean;
-    _num_enqueued_email_tasks integer;
-    _next_check_at timestamptz := null;
+    _send_email_task_id bigint := coalesce((
+        payload->'original_payload'->>'send_email_task_id'
+    )::bigint, (
+        payload->>'send_email_task_id'
+    )::bigint);
 begin
-    -- terminal if already succeeded
-    select exists (
-        select 1
-        from comms.send_email_task_succeeded s
-        where s.send_email_task_id = _send_email_task_id
-    ) into _has_success;
-    if _has_success then
-        return '{}'::jsonb;
-    end if;
-
-    select exists (
-        select 1 from comms.send_email_task_failed f
-        where f.send_email_task_id = _send_email_task_id
-    ) into _has_failed;
-
-    select count(*)
-    into _num_enqueued_email_tasks
-    from queues.task t
-    where t.task_type = 'email'
-      and (t.payload->>'send_email_task_id')::bigint = _send_email_task_id;
-
-    if _num_enqueued_email_tasks = 0 then
-        perform queues.enqueue(
-            'email',
-            jsonb_build_object(
-                'task_type', 'email',
-                'send_email_task_id', _send_email_task_id,
-                'before_handler', 'comms.get_email_payload',
-                'success_handler', 'comms.record_email_success',
-                'error_handler', 'comms.record_email_failure'
-            ),
-            now()
-        );
-        _next_check_at := now() + interval '5 seconds';
-    elsif _has_failed and _num_enqueued_email_tasks = 1 then
-        perform queues.enqueue(
-            'email',
-            jsonb_build_object(
-                'task_type', 'email',
-                'send_email_task_id', _send_email_task_id,
-                'before_handler', 'comms.get_email_payload',
-                'success_handler', 'comms.record_email_success',
-                'error_handler', 'comms.record_email_failure'
-            ),
-            now()
-        );
-        _next_check_at := now() + interval '10 seconds';
-    end if;
-
-    if not _has_success and _next_check_at is not null then
-        perform queues.enqueue(
-            'db_function',
-            jsonb_build_object(
-                'task_type', 'db_function',
-                'db_function', 'comms.send_email_supervisor',
-                'send_email_task_id', _send_email_task_id
-            ),
-            _next_check_at
+    -- validation
+    if _send_email_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_email_task_id'
         );
     end if;
 
-    return '{}'::jsonb;
+    -- output
+    insert into comms.send_email_task_succeeded (send_email_task_id)
+    values (_send_email_task_id)
+    on conflict (send_email_task_id) do nothing;
+
+    return jsonb_build_object(
+        'success', true
+    );
 end;
 $$;
 
+-- error handler: record failure fact
+create or replace function comms.record_email_failure(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_email_task_id bigint := coalesce((
+        payload->'original_payload'->>'send_email_task_id'
+    )::bigint, (
+        payload->>'send_email_task_id'
+    )::bigint);
+    _error_message text := (payload->>'error')::text;
+begin
+    -- validation
+    if _send_email_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_email_task_id'
+        );
+    end if;
+
+    -- output
+    insert into comms.send_email_task_failed (send_email_task_id, error_message)
+    values (_send_email_task_id, _error_message)
+    on conflict (send_email_task_id) do nothing;
+
+    return jsonb_build_object(
+        'success', true
+    );
+end;
+$$;
+
+-- supervisor: orchestrates email sending using append-only facts
+create or replace function comms.send_email_supervisor(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
+    _has_success boolean;
+    _num_failures integer;
+    _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
+    _base_delay_seconds integer := 5;
+    _next_check_at timestamptz;
+begin
+    -- validation
+    if _send_email_task_id is null then
+        return jsonb_build_object(
+            'error', 'missing_send_email_task_id'
+        );
+    end if;
+
+    -- facts
+    select comms.has_send_email_task_succeeded(_send_email_task_id)
+    into _has_success;
+    
+    if _has_success then
+        return jsonb_build_object(
+            'success', true
+        );
+    end if;
+
+    select comms.count_send_email_task_failures(_send_email_task_id)
+    into _num_failures;
+
+    if _num_failures >= _max_attempts then
+        return jsonb_build_object(
+            'success', true
+        );
+    end if;
+
+    -- compute
+    -- next check at exponential backoff based on failures
+    _next_check_at := (
+        now() +
+        ((_base_delay_seconds)::double precision * power(2, _num_failures)) *
+        interval '1 second'
+    );
+
+    perform queues.enqueue(
+        'email',
+        jsonb_build_object(
+            'task_type', 'email',
+            'send_email_task_id', _send_email_task_id,
+            'before_handler', 'comms.get_email_payload',
+            'success_handler', 'comms.record_email_success',
+            'error_handler', 'comms.record_email_failure'
+        ),
+        now()
+    );
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'comms.send_email_supervisor',
+            'send_email_task_id', _send_email_task_id
+        ),
+        _next_check_at
+    );
+
+    return jsonb_build_object(
+        'success', true
+    );
+end;
+$$;
+
+create type comms.kickoff_send_email_task_result as (
+    validation_failure_message text
+);
 
 -- kickoff: create send_email_task and enqueue supervisor
 create or replace function comms.kickoff_send_email_task(
-    _message_id bigint
+    _message_id bigint,
+    _scheduled_at timestamp with time zone default now()
 )
-returns jsonb
+returns comms.kickoff_send_email_task_result
 language plpgsql
 security definer
 as $$
 declare
     _send_email_task_id bigint;
-    _result jsonb;
 begin
+    -- validation
+    if _message_id is null then
+        return ('missing_message_id')::comms.kickoff_send_email_task_result;
+    end if;
+
+    if not comms.message_exists(_message_id) then
+        return ('message_not_found')::comms.kickoff_send_email_task_result;
+    end if;
+
+    -- output
     insert into comms.send_email_task (message_id)
     values (_message_id)
     returning send_email_task_id
@@ -143,89 +498,54 @@ begin
             'db_function', 'comms.send_email_supervisor',
             'send_email_task_id', _send_email_task_id
         ),
-        now()
+        _scheduled_at
     );
 
-    _result := jsonb_build_object('send_email_task_id', _send_email_task_id);
-    return _result;
+    return (null)::comms.kickoff_send_email_task_result;
 end;
 $$;
 
--- before handler: build provider payload from send_email_task_id in payload
-create or replace function comms.get_email_payload(
-    _payload jsonb
+-- result of creating and kicking off an email task
+create type comms.create_and_kickoff_email_task_result as (
+    validation_failure_message text
+);
+
+-- create email message and kickoff send_email_task
+create or replace function comms.create_and_kickoff_email_task(
+    _from_address text,
+    _to_address text,
+    _subject text,
+    _html text,
+    _scheduled_at timestamp with time zone default now()
 )
-returns jsonb
+returns comms.create_and_kickoff_email_task_result
 language plpgsql
-stable
 security definer
 as $$
 declare
-    _send_email_task_id bigint := (_payload->>'send_email_task_id')::bigint;
-    _message_id bigint;
-    _result jsonb;
+    _create_email_result comms.create_email_message_result;
+    _kickoff_result comms.kickoff_send_email_task_result;
 begin
-    select set.message_id
-    into _message_id
-    from comms.send_email_task set
-    where set.send_email_task_id = _send_email_task_id;
+    select comms.create_email_message(_from_address, _to_address, _subject, _html)
+    into _create_email_result;
 
-    if _message_id is null then
-        return '{}'::jsonb;
+    if _create_email_result.validation_failure_message is not null then
+        return (_create_email_result.validation_failure_message)::comms.create_and_kickoff_email_task_result;
     end if;
 
-    select comms.get_email_payload(_message_id)
-    into _result;
-    return coalesce(_result, '{}'::jsonb);
-end;
-$$;
+    select comms.kickoff_send_email_task(_create_email_result.message_id, _scheduled_at)
+    into _kickoff_result;
 
--- success handler: record success fact
-create or replace function comms.record_email_success(
-    _payload jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-as $$
-declare
-    _send_email_task_id bigint := coalesce((
-        _payload->'original_payload'->>'send_email_task_id'
-    )::bigint, (
-        _payload->>'send_email_task_id'
-    )::bigint);
-begin
-    insert into comms.send_email_task_succeeded (send_email_task_id)
-    values (_send_email_task_id)
-    on conflict (send_email_task_id) do nothing;
-    return '{}'::jsonb;
-end;
-$$;
+    if _kickoff_result.validation_failure_message is not null then
+        return (_kickoff_result.validation_failure_message)::comms.create_and_kickoff_email_task_result;
+    end if;
 
--- error handler: record failure fact
-create or replace function comms.record_email_failure(
-    _payload jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-as $$
-declare
-    _send_email_task_id bigint := coalesce((
-        _payload->'original_payload'->>'send_email_task_id'
-    )::bigint, (
-        _payload->>'send_email_task_id'
-    )::bigint);
-begin
-    insert into comms.send_email_task_failed (send_email_task_id)
-    values (_send_email_task_id)
-    on conflict (send_email_task_id) do nothing;
-    return '{}'::jsonb;
+    return (null)::comms.create_and_kickoff_email_task_result;
 end;
 $$;
 
 -- per-function grants to worker_service_user (security definer functions)
-grant execute on function comms.kickoff_send_email_task(bigint) to worker_service_user;
+grant execute on function comms.kickoff_send_email_task(bigint, timestamp with time zone) to worker_service_user;
 grant execute on function comms.get_email_payload(jsonb) to worker_service_user;
 grant execute on function comms.record_email_success(jsonb) to worker_service_user;
 grant execute on function comms.record_email_failure(jsonb) to worker_service_user;

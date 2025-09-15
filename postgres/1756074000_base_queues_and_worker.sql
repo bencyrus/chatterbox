@@ -2,7 +2,6 @@ begin;
 
 -- internal schemas for queues and function runner
 create schema queues;
-create schema internal;
 
 -- worker service user with minimal grants
 create user worker_service_user with login password 'worker_service_user';
@@ -82,23 +81,27 @@ $$;
 
 -- helper to append an error row
 create or replace function queues.append_error(
-    _task_id bigint,
-    _error_message text
+    task_id bigint,
+    error_message text
 )
-returns void
+returns jsonb
 language plpgsql
 security definer
 as $$
 begin
     insert into queues.error (task_id, error_message)
-    values (_task_id, coalesce(_error_message, ''));
+    values (task_id, coalesce(error_message, ''));
+
+    return jsonb_build_object(
+        'success', true
+    );
 end;
 $$;
 
 -- function runner: invokes target function (payload jsonb) -> jsonb
 create or replace function internal.run_function(
-    _function_name text,
-    _payload jsonb
+    function_name text,
+    payload jsonb
 )
 returns jsonb
 language plpgsql
@@ -107,9 +110,9 @@ as $$
 declare
     _result jsonb;
 begin
-    execute format('select %s($1)::jsonb', _function_name)
+    execute format('select %s($1)::jsonb', function_name)
     into _result
-    using coalesce(_payload, '{}'::jsonb);
+    using coalesce(payload, '{}'::jsonb);
 
     return coalesce(_result, '{}'::jsonb);
 end;
