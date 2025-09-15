@@ -42,6 +42,14 @@ Shape of the security-invoker runner that dispatches calls (relies on per-functi
 - `comms.send_email_task_succeeded/failed`, `comms.send_sms_task_succeeded/failed`: facts that track outcomes.
 - Facts tables per process (email/sms): `..._succeeded`, `..._failed`. Primary key is the process task id (also a foreign key to the root task table). We do not store separate surrogate ids.
 
+Permissions summary:
+
+- Worker role (e.g., `worker_service_user`) gets:
+  - usage on `queues`, `internal`, and relevant business schemas (e.g., `comms`)
+  - execute on `queues.dequeue_next_available_task()`
+  - execute on `internal.run_function(text, jsonb)`
+  - execute on specific business functions it must call (supervisors and handlers), which are security definer
+
 ### Retry derivation (ICO: input, compute, output)
 
 - Prefer small facts functions (input) over inline queries and avoid relying on `queues.task` for decision counts.
@@ -161,6 +169,28 @@ return
 - **Observability**: Use `queues.error` for handler failures; add metrics/logging in the worker.
 - **Throughput**: Use multiple worker goroutines with contention guarded by `skip locked`.
 - Worker operational errors are appended to `queues.error` and do not abort the process beyond the current task.
+
+## Checklist: implementing a new business process
+
+1. Model data and facts
+   - Add base record(s) and a root task table (e.g., `myprocess_task`)
+   - Add terminal facts tables: `myprocess_task_succeeded`, `myprocess_task_failed`
+   - Create facts helpers: `has_myprocess_task_succeeded(id)`, `count_myprocess_task_failures(id)`
+2. Write handlers
+   - `get_*_payload(payload jsonb) returns jsonb` (security definer)
+   - `record_*_success(payload jsonb) returns jsonb` (security definer)
+   - `record_*_failure(payload jsonb) returns jsonb` (security definer)
+3. Write the supervisor
+   - `myprocess_supervisor(payload jsonb) returns jsonb` (security definer)
+   - Read facts, decide on enqueue, re-enqueue self with backoff, exit when terminal
+4. Kickoff function
+   - `kickoff_myprocess_task(root_id, scheduled_at timestamptz)` inserts root task and enqueues supervisor
+5. Grants
+   - Grant `execute` on supervisor and handlers to the worker role
+6. Test end-to-end
+   - Manually insert data, kickoff, run worker, verify facts and backoff
+7. Observability
+   - Ensure error messages are informative and carry context (ids)
 
 ## Notes
 
