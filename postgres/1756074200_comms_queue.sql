@@ -193,6 +193,13 @@ create table comms.send_email_task (
     created_at timestamp with time zone not null default now()
 );
 
+-- scheduled facts (append-only, one per scheduled attempt)
+create table comms.send_email_task_scheduled (
+    send_email_task_scheduled_id bigserial primary key,
+    send_email_task_id bigint not null references comms.send_email_task(send_email_task_id) on delete cascade,
+    created_at timestamp with time zone not null default now()
+);
+
 -- success facts (one per logical task)
 create table comms.send_email_task_succeeded (
     send_email_task_id bigint primary key references comms.send_email_task(send_email_task_id) on delete cascade,
@@ -201,7 +208,8 @@ create table comms.send_email_task_succeeded (
 
 -- failure facts (append-only, one per failed attempt)
 create table comms.send_email_task_failed (
-    send_email_task_id bigint primary key references comms.send_email_task(send_email_task_id) on delete cascade,
+    send_email_task_failed_id bigserial primary key,
+    send_email_task_id bigint not null references comms.send_email_task(send_email_task_id) on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
@@ -213,6 +221,13 @@ create table comms.send_sms_task (
     created_at timestamp with time zone not null default now()
 );
 
+-- scheduled facts (append-only, one per scheduled attempt)
+create table comms.send_sms_task_scheduled (
+    send_sms_task_scheduled_id bigserial primary key,
+    send_sms_task_id bigint not null references comms.send_sms_task(send_sms_task_id) on delete cascade,
+    created_at timestamp with time zone not null default now()
+);
+
 -- success facts (one per logical task)
 create table comms.send_sms_task_succeeded (
     send_sms_task_id bigint primary key references comms.send_sms_task(send_sms_task_id) on delete cascade,
@@ -221,7 +236,8 @@ create table comms.send_sms_task_succeeded (
 
 -- failure facts (append-only, one per failed attempt)
 create table comms.send_sms_task_failed (
-    send_sms_task_id bigint primary key references comms.send_sms_task(send_sms_task_id) on delete cascade,
+    send_sms_task_failed_id bigserial primary key,
+    send_sms_task_id bigint not null references comms.send_sms_task(send_sms_task_id) on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
@@ -252,6 +268,19 @@ as $$
     select count(*)::integer
     from comms.send_email_task_failed f
     where f.send_email_task_id = _send_email_task_id;
+$$;
+
+-- facts: count scheduled attempts for send_email_task
+create or replace function comms.count_send_email_task_scheduled(
+    _send_email_task_id bigint
+)
+returns integer
+language sql
+stable
+as $$
+    select count(*)::integer
+    from comms.send_email_task_scheduled s
+    where s.send_email_task_id = _send_email_task_id;
 $$;
 
 -- before handler: build provider payload from send_email_task_id in payload
@@ -373,8 +402,7 @@ begin
 
     -- output
     insert into comms.send_email_task_failed (send_email_task_id, error_message)
-    values (_send_email_task_id, _error_message)
-    on conflict (send_email_task_id) do nothing;
+    values (_send_email_task_id, _error_message);
 
     return jsonb_build_object(
         'success', true
@@ -383,6 +411,11 @@ end;
 $$;
 
 -- supervisor: orchestrates email sending using append-only facts
+-- Supervisor behavior:
+-- - Locks the root task to serialize concurrent runs
+-- - Terminates early if succeeded or attempts exhausted
+-- - If no attempt is outstanding (scheduled <= failures), records a scheduled fact and enqueues the channel task
+-- - Always re-enqueues itself once per run at computed backoff
 create or replace function comms.send_email_supervisor(
     payload jsonb
 )
@@ -394,6 +427,7 @@ declare
     _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
     _has_success boolean;
     _num_failures integer;
+    _num_scheduled integer;
     _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
     _base_delay_seconds integer := 5;
     _next_check_at timestamptz;
@@ -405,7 +439,12 @@ begin
         );
     end if;
 
-    -- facts
+    -- lock root task to avoid duplicate scheduling under concurrency
+    perform 1
+    from comms.send_email_task t
+    where t.send_email_task_id = _send_email_task_id
+    for update;
+
     select comms.has_send_email_task_succeeded(_send_email_task_id)
     into _has_success;
     
@@ -424,6 +463,9 @@ begin
         );
     end if;
 
+    select comms.count_send_email_task_scheduled(_send_email_task_id)
+    into _num_scheduled;
+
     -- compute
     -- next check at exponential backoff based on failures
     _next_check_at := (
@@ -432,17 +474,23 @@ begin
         interval '1 second'
     );
 
-    perform queues.enqueue(
-        'email',
-        jsonb_build_object(
-            'task_type', 'email',
-            'send_email_task_id', _send_email_task_id,
-            'before_handler', 'comms.get_email_payload',
-            'success_handler', 'comms.record_email_success',
-            'error_handler', 'comms.record_email_failure'
-        ),
-        now()
-    );
+    -- schedule a new attempt only if there is no outstanding scheduled attempt
+    if _num_scheduled <= _num_failures then
+        insert into comms.send_email_task_scheduled (send_email_task_id)
+        values (_send_email_task_id);
+
+        perform queues.enqueue(
+            'email',
+            jsonb_build_object(
+                'task_type', 'email',
+                'send_email_task_id', _send_email_task_id,
+                'before_handler', 'comms.get_email_payload',
+                'success_handler', 'comms.record_email_success',
+                'error_handler', 'comms.record_email_failure'
+            ),
+            now()
+        );
+    end if;
 
     perform queues.enqueue(
         'db_function',
@@ -579,6 +627,19 @@ as $$
     where f.send_sms_task_id = _send_sms_task_id;
 $$;
 
+-- facts: count scheduled attempts for send_sms_task
+create or replace function comms.count_send_sms_task_scheduled(
+    _send_sms_task_id bigint
+)
+returns integer
+language sql
+stable
+as $$
+    select count(*)::integer
+    from comms.send_sms_task_scheduled s
+    where s.send_sms_task_id = _send_sms_task_id;
+$$;
+
 -- before handler: build provider payload from send_sms_task_id in payload
 create or replace function comms.get_sms_payload(
     payload jsonb
@@ -696,8 +757,7 @@ begin
 
     -- output
     insert into comms.send_sms_task_failed (send_sms_task_id, error_message)
-    values (_send_sms_task_id, _error_message)
-    on conflict (send_sms_task_id) do nothing;
+    values (_send_sms_task_id, _error_message);
 
     return jsonb_build_object(
         'success', true
@@ -706,6 +766,11 @@ end;
 $$;
 
 -- supervisor: orchestrates sms sending using append-only facts
+-- Supervisor behavior:
+-- - Locks the root task to serialize concurrent runs
+-- - Terminates early if succeeded or attempts exhausted
+-- - If no attempt is outstanding (scheduled <= failures), records a scheduled fact and enqueues the channel task
+-- - Always re-enqueues itself once per run at computed backoff
 create or replace function comms.send_sms_supervisor(
     payload jsonb
 )
@@ -717,6 +782,7 @@ declare
     _send_sms_task_id bigint := (payload->>'send_sms_task_id')::bigint;
     _has_success boolean;
     _num_failures integer;
+    _num_scheduled integer;
     _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
     _base_delay_seconds integer := 5;
     _next_check_at timestamptz;
@@ -728,7 +794,12 @@ begin
         );
     end if;
 
-    -- facts
+    -- lock root task to avoid duplicate scheduling under concurrency
+    perform 1
+    from comms.send_sms_task t
+    where t.send_sms_task_id = _send_sms_task_id
+    for update;
+
     select comms.has_send_sms_task_succeeded(_send_sms_task_id)
     into _has_success;
     
@@ -747,6 +818,9 @@ begin
         );
     end if;
 
+    select comms.count_send_sms_task_scheduled(_send_sms_task_id)
+    into _num_scheduled;
+
     -- compute
     -- next check at exponential backoff based on failures
     _next_check_at := (
@@ -755,17 +829,23 @@ begin
         interval '1 second'
     );
 
-    perform queues.enqueue(
-        'sms',
-        jsonb_build_object(
-            'task_type', 'sms',
-            'send_sms_task_id', _send_sms_task_id,
-            'before_handler', 'comms.get_sms_payload',
-            'success_handler', 'comms.record_sms_success',
-            'error_handler', 'comms.record_sms_failure'
-        ),
-        now()
-    );
+    -- schedule a new attempt only if there is no outstanding scheduled attempt
+    if _num_scheduled <= _num_failures then
+        insert into comms.send_sms_task_scheduled (send_sms_task_id)
+        values (_send_sms_task_id);
+
+        perform queues.enqueue(
+            'sms',
+            jsonb_build_object(
+                'task_type', 'sms',
+                'send_sms_task_id', _send_sms_task_id,
+                'before_handler', 'comms.get_sms_payload',
+                'success_handler', 'comms.record_sms_success',
+                'error_handler', 'comms.record_sms_failure'
+            ),
+            now()
+        );
+    end if;
 
     perform queues.enqueue(
         'db_function',

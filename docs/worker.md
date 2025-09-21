@@ -39,8 +39,11 @@ Shape of the security-invoker runner that dispatches calls (relies on per-functi
 - `comms.message`: base comms record with `channel in ('email','sms')`.
 - `comms.email_message`, `comms.sms_message`: channel-specific payload data.
 - `comms.send_email_task`, `comms.send_sms_task`: root tasks per logical send.
-- `comms.send_email_task_succeeded/failed`, `comms.send_sms_task_succeeded/failed`: facts that track outcomes.
-- Facts tables per process (email/sms): `..._succeeded`, `..._failed`. Primary key is the process task id (also a foreign key to the root task table). We do not store separate surrogate ids.
+- `comms.send_email_task_scheduled/succeeded/failed`, `comms.send_sms_task_scheduled/succeeded/failed`: facts that track scheduling and outcomes.
+- Facts tables per process (email/sms):
+  - `..._scheduled`: append-only; one row per attempt the supervisor schedules.
+  - `..._failed`: append-only; one row per failed attempt.
+  - `..._succeeded`: terminal fact; at-most-one per process task.
 
 Permissions summary:
 
@@ -56,6 +59,7 @@ Permissions summary:
 - Example facts functions for email:
   - `comms.has_send_email_task_succeeded(send_email_task_id) returns boolean`
   - `comms.count_send_email_task_failures(send_email_task_id) returns integer`
+  - `comms.count_send_email_task_scheduled(send_email_task_id) returns integer`
 - Compute stage uses these facts with a local `_max_attempts` to decide whether to enqueue the channel task and/or the supervisor. Output stage enqueues accordingly.
 
 ## Payload contracts
@@ -149,11 +153,19 @@ num_failures := comms.count_send_email_task_failures(X)
 max_attempts := 2  # one retry
 
 # 3) compute + output
+num_scheduled := count_scheduled(X)
+
 if not has_success and num_failures < max_attempts:
-  enqueue queues.task email now with handlers
+  if num_scheduled <= num_failures:
+    # no outstanding attempt; schedule a new one
+    insert scheduled fact
+    enqueue queues.task email now with handlers
+  else:
+    # an attempt is already scheduled; do not double-schedule
+    (no-op)
 
 # 4) schedule supervisor again
-enqueue supervisor again after small delay if not terminal
+enqueue supervisor again after small delay if not terminal (always re-enqueued once per run)
 
 return
 ```
@@ -211,7 +223,7 @@ This is a concrete, step-by-step story of a single email being sent with Resend 
 
 - Worker takes on the supervisor task and invokes the function.
 - Supervisor reads facts for X: no success, no failure.
-- Supervisor enqueues one email task now with handlers `{ before_handler: 'comms.get_email_payload', success_handler: 'comms.record_email_success', error_handler: 'comms.record_email_failure' }`.
+- Supervisor records a scheduled fact and enqueues one email task now with handlers `{ before_handler: 'comms.get_email_payload', success_handler: 'comms.record_email_success', error_handler: 'comms.record_email_failure' }`.
 - Supervisor also enqueues itself to run again in a few seconds.
 
 3. Email attempt #1 (failure)
@@ -223,8 +235,7 @@ This is a concrete, step-by-step story of a single email being sent with Resend 
 4. Supervisor run #2
 
 - Worker takes the supervisor task again.
-- Supervisor reads facts for X: failure exists, retry still allowed.
-- Supervisor enqueues a second email task now with the same handlers.
+- Supervisor reads facts for X: failure exists, retry still allowed. If scheduled count equals failures, it records a new scheduled fact and enqueues a second email task now with the same handlers. If scheduled > failures (an attempt is already pending), it does not double-schedule.
 - Supervisor enqueues itself to run again shortly.
 
 5. Email attempt #2 (success)
