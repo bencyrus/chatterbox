@@ -1,0 +1,61 @@
+facts function
+supervisor
+frotnend polling implementation ( verify opens tls connection opens it and doesn't close until done )
+
+
+by default all functions are execute granted to public. ask how to revoke.
+
+-- takes json and retunrs jsonb.
+-- {
+--     "payload": {
+--         "send_message_task_id": 1,
+--         "task_type": "db_function",
+--         "db_function": "foo"
+--     },
+-- }
+-- go program needs only one thing. the task type. just passed the whole json to the handler based on the task type. unmarshal that.
+
+-- pass the entire json. the function will extract what they want. it doesn't matter that there is more.
+-- throw around the whole bag of json it's fine.
+
+-- based on the task type decide what handler to run.
+-- if db_function, run the db function passing it the whole json payload.
+-- if 
+
+
+-- 3 optional db functions that can run in case of success or failure
+-- handler( onSuccess ), builder ( before ), error ( failure ) functions
+-- could be nullable columns on the task
+-- get_email_payload({original_payload})
+-- record_email_success({original_payload}, {worker_handler_results})
+-- record_email_failure({original_payload}, {worker_handler_results})
+
+-- select for update skip locked
+-- update to dequeued_at
+
+-- do not do at the same transaction as dequeuing. because if it fails, we will have an infinite loop of retries.
+-- also we don't want to do too much computation there.
+
+-- at the end of login:
+-- 1. calls a function start_send_email_task
+-- -- That function writes into a table email_send_attempt_table it will have an email message id which is a reference for process id
+-- 2. within the same function, add a task to the queue that contains the id of this email message (busines level object)
+-- 3. enque a task in the queue that has a db func and a reference to the process which is the message send attempt id. (message_send_attempt_supervisor) as argument it takes json of the payload. it looks up all the email info (worker calls it) it does ICO . input computer output.) at teh end of output, it decides if it wants to run again. 
+-- -- supervision tree it is called.
+-- 4. worker runs the supervisor. superviser checks if it needs to send an email. do I want to send an email (emai_sent_started table will have an id and a reference to the send attempt (the supervised task) and created at)? 
+-- sucess chandler would write email_sent_attempt
+-- email send task table
+-- supervisor run count more than 5 terminate supervisor. 
+-- email_send_task table. (one primary key for task)
+-- email_attempt_started table. checks to see if email sent. (one primary key for started, task id)
+-- email_attempt_succeeded ( one primary key for started )
+-- email_attempt_failed ( one primary key for started )
+-- if there is one is suceeded terminate
+-- supervisor should have run count. add wait for the supervisor. we want to avoid a situation where the supervispr runs before the task itself. make supervisor be able to wait before called again.
+-- supervisor gets dequeued at the start. in the supervisor function, checks am I in progrees, if so, it enqueues iself again. for example if email is scheduled for tomorrow, it should shechedule itself for tomorrrow as well.
+-- for long processes, we need to have sort of a reverse exponential backoff.
+-- if scheduleing for tomorrow, then just schedule the supervisor for tomorrow no need for email thing tomorrow no need for email tomorrow.
+-- decide it based on the failure of email task not queue task.
+
+-- supervisor facts function. it's the thing that supervisor calls that we chuck in all the ugly select queries in. for example what's out status. 
+-- ico is: input (facts), compute (logic), output (making changes in db). or read think write.
