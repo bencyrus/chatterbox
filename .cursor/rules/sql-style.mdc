@@ -7,7 +7,7 @@ alwaysApply: true
 
 - Use lowercase SQL keywords and snake_case identifiers.
 - Schemas are plural nouns (e.g., queues, comms, auth).
-- DDL/data design: follow normalization; prefer append-only; avoid deletes/updates; derive state from recorded facts.
+- DDL/data design: follow normalization; avoid deletes/updates; derive state from recorded facts.
 - Use domains for small enumerations; keep names descriptive and consistent.
 - Add a one-line comment above each table/type/function stating purpose.
 
