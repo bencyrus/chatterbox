@@ -64,7 +64,7 @@ begin
         from queues.task t
         where t.dequeued_at is null
           and t.scheduled_at <= now()
-        order by t.scheduled_at asc, t.task_id asc
+        order by t.scheduled_at, t.task_id
         limit 1
         for update skip locked
     )
@@ -90,7 +90,7 @@ security definer
 as $$
 begin
     insert into queues.error (task_id, error_message)
-    values (task_id, coalesce(error_message, ''));
+    values ($1, coalesce($2, ''));
 
     return jsonb_build_object(
         'success', true

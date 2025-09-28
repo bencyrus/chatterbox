@@ -958,4 +958,144 @@ grant execute on function comms.record_sms_success(jsonb) to worker_service_user
 grant execute on function comms.record_sms_failure(jsonb) to worker_service_user;
 grant execute on function comms.send_sms_supervisor(jsonb) to worker_service_user;
 
+-- seed hello world templates (idempotent)
+insert into comms.email_template (
+    template_key,
+    subject,
+    body,
+    body_params,
+    description
+)
+values (
+    'hello_world_email',
+    'Hello, ${name}!',
+    'Hello, ${name}! Welcome to Chatterbox.',
+    array['name'],
+    'Hello world email template'
+)
+on conflict (template_key) do nothing;
+
+insert into comms.sms_template (
+    template_key,
+    body,
+    body_params,
+    description
+)
+values (
+    'hello_world_sms',
+    'Hello, ${name}! This is a test SMS from Chatterbox.',
+    array['name'],
+    'Hello world sms template'
+)
+on conflict (template_key) do nothing;
+
+-- api.hello_world_email(_to_address): builds from template and schedules send
+create or replace function api.hello_world_email(
+    _to_address text
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _from_address text := 'hello@your-domain.com';
+    _params jsonb := jsonb_build_object('name', 'World');
+    _subject text;
+    _body text;
+    _result comms.create_and_kickoff_email_task_result;
+begin
+    -- subject from template
+    select comms.generate_message_body_from_template(
+        et.subject,
+        _params,
+        et.body_params
+    )
+    into _subject
+    from comms.email_template et
+    where et.template_key = 'hello_world_email';
+
+    -- body from template
+    select comms.generate_message_body_from_template(
+        et.body,
+        _params,
+        et.body_params
+    )
+    into _body
+    from comms.email_template et
+    where et.template_key = 'hello_world_email';
+
+    if _subject is null or _body is null then
+        raise exception 'Hello World Email Failed'
+            using detail = 'Template not found',
+                  hint = 'template_not_found';
+    end if;
+
+    select comms.create_and_kickoff_email_task(
+        _from_address,
+        _to_address,
+        _subject,
+        _body,
+        now()
+    )
+    into _result;
+
+    if _result.validation_failure_message is not null then
+        raise exception 'Hello World Email Failed'
+            using detail = 'Invalid Request Payload',
+                  hint = _result.validation_failure_message;
+    end if;
+
+    return jsonb_build_object('success', true);
+end;
+$$;
+
+-- api.hello_world_sms(_to_number): builds from template and schedules send
+create or replace function api.hello_world_sms(
+    _to_number text
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _params jsonb := jsonb_build_object('name', 'World');
+    _body text;
+    _result comms.create_and_kickoff_sms_task_result;
+begin
+    -- body from template
+    select comms.generate_message_body_from_template(
+        st.body,
+        _params,
+        st.body_params
+    )
+    into _body
+    from comms.sms_template st
+    where st.template_key = 'hello_world_sms';
+
+    if _body is null then
+        raise exception 'Hello World SMS Failed'
+            using detail = 'Template not found',
+                  hint = 'template_not_found';
+    end if;
+
+    select comms.create_and_kickoff_sms_task(
+        _to_number,
+        _body,
+        now()
+    )
+    into _result;
+
+    if _result.validation_failure_message is not null then
+        raise exception 'Hello World SMS Failed'
+            using detail = 'Invalid Request Payload',
+                  hint = _result.validation_failure_message;
+    end if;
+
+    return jsonb_build_object('success', true);
+end;
+$$;
+
+grant execute on function api.hello_world_email(text) to anon, authenticated;
+grant execute on function api.hello_world_sms(text) to anon, authenticated;
+
 commit;
