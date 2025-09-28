@@ -34,16 +34,19 @@ func (c *Client) Close() error {
 // DequeueNextTask calls queues.dequeue_next_available_task() to get the next available task
 func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 	var task types.Task
+	var taskID sql.NullInt64
+	var taskType sql.NullString
+	var payloadBytes []byte
 	var enqueuedAt, scheduledAt sql.NullTime
 	var dequeuedAt sql.NullTime
 
-	query := `SELECT * FROM queues.dequeue_next_available_task()`
+	query := `select * from queues.dequeue_next_available_task()`
 	row := c.db.QueryRowContext(ctx, query)
 
 	err := row.Scan(
-		&task.TaskID,
-		&task.TaskType,
-		&task.Payload,
+		&taskID,
+		&taskType,
+		&payloadBytes,
 		&enqueuedAt,
 		&scheduledAt,
 		&dequeuedAt,
@@ -56,7 +59,18 @@ func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 		return nil, fmt.Errorf("failed to dequeue task: %w", err)
 	}
 
-	// Convert nullable times
+	// Handle NULL composite (no task claimed)
+	if !taskID.Valid {
+		return nil, nil
+	}
+
+	task.TaskID = taskID.Int64
+	if taskType.Valid {
+		task.TaskType = taskType.String
+	}
+	if payloadBytes != nil {
+		task.Payload = payloadBytes
+	}
 	if enqueuedAt.Valid {
 		task.EnqueuedAt = enqueuedAt.Time
 	}
