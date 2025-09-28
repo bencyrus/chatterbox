@@ -86,6 +86,26 @@ Business task payloads (email, sms, etc.) — also reference the same single id:
 }
 ```
 
+### Standard function result envelope (DBFunctionResult)
+
+All internal functions invoked by the worker (supervisors and handlers) return a standardized JSON envelope, mapped in Go to `types.DBFunctionResult`:
+
+```json
+{
+  "success": true,
+  "error": "", // optional: reserved for operational failures
+  "validation_failure_message": "", // optional: for non-retriable business validation failures
+  "payload": {} // optional: for returning typed data to the worker
+}
+```
+
+- **success**: true for successful execution.
+- **error**: set by the callee only for unexpected operational errors that should be logged and typically retried by scheduling logic.
+- **validation_failure_message**: set when inputs are invalid or a terminal guard is hit; the worker treats this as non-fatal and does not retry the handler.
+- **payload**: optional data returned by before-handlers for provider calls (e.g., email/sms payloads).
+
+Before-handlers MUST populate either `success: true` with a `payload`, or `success: false` with a `validation_failure_message`. Avoid using `error` for validation scenarios.
+
 ## Worker lifecycle (high-level)
 
 Pseudo-code for the Go worker loop that processes available tasks:
