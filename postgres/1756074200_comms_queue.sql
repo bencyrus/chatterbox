@@ -300,7 +300,8 @@ begin
     -- validation
     if _send_email_task_id is null then
         return jsonb_build_object(
-            'error', 'missing_send_email_task_id'
+            'success', false,
+            'validation_failure_message', 'missing_send_email_task_id'
         );
     end if;
 
@@ -312,7 +313,8 @@ begin
 
     if _message_id is null then
         return jsonb_build_object(
-            'error', 'task_not_found'
+            'success', false,
+            'validation_failure_message', 'task_not_found'
         );
     end if;
 
@@ -333,7 +335,8 @@ begin
     -- output
     if _result is null then
         return jsonb_build_object(
-            'error', 'payload_not_found'
+            'success', false,
+            'validation_failure_message', 'payload_not_found'
         );
     end if;
 
@@ -657,7 +660,8 @@ begin
     -- validation
     if _send_sms_task_id is null then
         return jsonb_build_object(
-            'error', 'missing_send_sms_task_id'
+            'success', false,
+            'validation_failure_message', 'missing_send_sms_task_id'
         );
     end if;
 
@@ -669,7 +673,8 @@ begin
 
     if _message_id is null then
         return jsonb_build_object(
-            'error', 'task_not_found'
+            'success', false,
+            'validation_failure_message', 'task_not_found'
         );
     end if;
 
@@ -688,7 +693,8 @@ begin
     -- output
     if _result is null then
         return jsonb_build_object(
-            'error', 'payload_not_found'
+            'success', false,
+            'validation_failure_message', 'payload_not_found'
         );
     end if;
 
