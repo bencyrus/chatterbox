@@ -989,9 +989,9 @@ values (
 )
 on conflict (template_key) do nothing;
 
--- api.hello_world_email(_to_address): builds from template and schedules send
+-- api.hello_world_email(to_address): builds from template and schedules send
 create or replace function api.hello_world_email(
-    _to_address text
+    to_address text
 )
 returns jsonb
 language plpgsql
@@ -1005,7 +1005,7 @@ declare
     _result comms.create_and_kickoff_email_task_result;
 begin
     -- validate input
-    if _to_address is null or btrim(_to_address) = '' then
+    if to_address is null or btrim(to_address) = '' then
         raise exception 'Hello World Email Failed'
             using detail = 'Invalid Request Payload',
                   hint = 'missing_to_address';
@@ -1039,7 +1039,7 @@ begin
 
     select comms.create_and_kickoff_email_task(
         _from_address,
-        _to_address,
+        to_address,
         _subject,
         _body,
         now()
@@ -1056,9 +1056,9 @@ begin
 end;
 $$;
 
--- api.hello_world_sms(_to_number): builds from template and schedules send
+-- api.hello_world_sms(to_number): builds from template and schedules send
 create or replace function api.hello_world_sms(
-    _to_number text
+    to_number text
 )
 returns jsonb
 language plpgsql
@@ -1070,7 +1070,7 @@ declare
     _result comms.create_and_kickoff_sms_task_result;
 begin
     -- validate input
-    if _to_number is null or btrim(_to_number) = '' then
+    if to_number is null or btrim(to_number) = '' then
         raise exception 'Hello World SMS Failed'
             using detail = 'Invalid Request Payload',
                   hint = 'missing_to_number';
@@ -1093,7 +1093,7 @@ begin
     end if;
 
     select comms.create_and_kickoff_sms_task(
-        _to_number,
+        to_number,
         _body,
         now()
     )
