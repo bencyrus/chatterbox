@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/bencyrus/chatterbox/worker/internal/types"
-	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 )
 
@@ -35,8 +34,8 @@ func (c *Client) Close() error {
 // DequeueNextTask calls queues.dequeue_next_available_task() to get the next available task
 func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 	var task types.Task
-	var enqueuedAt, scheduledAt pq.NullTime
-	var dequeuedAt pq.NullTime
+	var enqueuedAt, scheduledAt sql.NullTime
+	var dequeuedAt sql.NullTime
 
 	query := `SELECT * FROM queues.dequeue_next_available_task()`
 	row := c.db.QueryRowContext(ctx, query)
