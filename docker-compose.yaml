@@ -79,6 +79,21 @@ services:
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "files", "service": "files"}]'
 
+  worker:
+    build:
+      context: .
+      dockerfile: ./worker/Dockerfile
+    container_name: worker
+    restart: unless-stopped
+    env_file:
+      - ./secrets/.env.worker
+    networks:
+      - chattterbox-network
+    depends_on:
+      - postgrest
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
+
 volumes:
   caddy_data:
   caddy_config:
