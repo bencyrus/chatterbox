@@ -1004,6 +1004,13 @@ declare
     _body text;
     _result comms.create_and_kickoff_email_task_result;
 begin
+    -- validate input
+    if _to_address is null or btrim(_to_address) = '' then
+        raise exception 'Hello World Email Failed'
+            using detail = 'Invalid Request Payload',
+                  hint = 'missing_to_address';
+    end if;
+
     -- subject from template
     select comms.generate_message_body_from_template(
         et.subject,
@@ -1062,6 +1069,13 @@ declare
     _body text;
     _result comms.create_and_kickoff_sms_task_result;
 begin
+    -- validate input
+    if _to_number is null or btrim(_to_number) = '' then
+        raise exception 'Hello World SMS Failed'
+            using detail = 'Invalid Request Payload',
+                  hint = 'missing_to_number';
+    end if;
+
     -- body from template
     select comms.generate_message_body_from_template(
         st.body,
