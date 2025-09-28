@@ -959,5 +959,3 @@ grant execute on function comms.record_sms_failure(jsonb) to worker_service_user
 grant execute on function comms.send_sms_supervisor(jsonb) to worker_service_user;
 
 commit;
-
-

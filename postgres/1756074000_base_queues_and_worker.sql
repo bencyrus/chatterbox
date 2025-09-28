@@ -124,5 +124,3 @@ grant execute on function internal.run_function(text, jsonb) to worker_service_u
 grant execute on function queues.append_error(bigint, text) to worker_service_user;
 
 commit;
-
-
