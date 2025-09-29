@@ -4,6 +4,8 @@ begin;
 
 -- comms schema
 create schema comms;
+grant usage on schema comms to worker_service_user;
+
 
 -- domain for communication channel kinds
 create domain comms.channel as text
