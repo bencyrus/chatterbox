@@ -1,6 +1,6 @@
 ## Comms system (email/sms) on top of the job queue
 
-This document explains the communication domain (`comms`) built on the generic queue. It covers message storage, payloads, and enqueue helpers.
+This document explains the communication domain (`comms`) built on the generic queue. It covers message storage, payloads, and supervisor-driven kickoff/enqueue helpers.
 
 ### Data model
 
@@ -15,42 +15,52 @@ This document explains the communication domain (`comms`) built on the generic q
 
 ### Creation helpers (internal)
 
-- `comms.create_email_message(from_address, to_address, subject, html)` → `create_email_message_result`
-  - Validates required inputs; returns `{ validation_failure_message, message_id }`.
-- `comms.create_sms_message(to_number, body)` → `create_sms_message_result`
-  - Validates required inputs; returns `{ validation_failure_message, message_id }`.
+- `comms.create_email_message(from_address, to_address, subject, html)`
+  - Validates required inputs; returns OUT params `validation_failure_message text`, `created_message_id bigint`.
+- `comms.create_sms_message(to_number, body)`
+  - Validates required inputs; returns OUT params `validation_failure_message text`, `created_message_id bigint`.
 
-### Enqueue helpers (internal)
+### Kickoff helpers (internal, supervisor-driven)
 
-- `comms.create_and_enqueue_email(...)` → `enqueue_job_result`
-  - Creates the email message, enqueues a job: returns `{ validation_failure_message, job }`.
-- `comms.create_and_enqueue_sms(...)` → `enqueue_job_result`
-  - Creates the sms message, enqueues a job: returns `{ validation_failure_message, job }`.
+- `comms.kickoff_send_email_task(message_id, scheduled_at timestamptz default now())`
+  - Creates a root `comms.send_email_task` and enqueues the supervisor `comms.send_email_supervisor`. Returns OUT param `validation_failure_message text` (null on success).
+- `comms.create_and_kickoff_email_task(from_address, to_address, subject, html, scheduled_at timestamptz default now())`
+  - Validates and creates the email message, then kicks off the supervisor. Returns OUT `validation_failure_message text`.
+- `comms.kickoff_send_sms_task(message_id, scheduled_at timestamptz default now())` and `comms.create_and_kickoff_sms_task(to_number, body, scheduled_at timestamptz default now())` mirror the email flow.
 
-These helpers call `queues.enqueue(task_type, resource_id, priority, num_max_attempts, scheduled_at)`.
+These helpers ultimately call `queues.enqueue(task_type, payload jsonb, scheduled_at timestamptz)` from within supervisors/handlers. The worker itself never enqueues work.
 
 ### Worker consumption
 
-- Workers fetch jobs via `service_api.fetch_next_task` and receive:
-  - `job`: `{ job_id, lease_id, task_type, resource_id, priority, scheduled_at }`
-  - `payload`: channel-specific JSON built by `comms.get_email_payload(message_id)` or `comms.get_sms_payload(message_id)`.
+- The worker leases the next task via `queues.dequeue_next_available_task()` and inspects `task_type` and `payload`.
+- For `task_type = 'db_function'`, the worker invokes `internal.run_function(payload.db_function, payload)`.
+- For channel tasks (`'email'`, `'sms'`):
+  - Optionally run `before_handler` (from the payload) to build provider payload (`{ success: true, payload: {...} }`).
+  - Call the provider using the worker's integration.
+  - On success, call `success_handler`; on error, append `queues.error` and call `error_handler`.
+  - See `docs/worker.md` for the standard JSON envelope and lifecycle.
 
 ### Error handling and validation
 
-- Internal functions never raise exceptions; they return `validation_failure_message` on failure.
-- Public `service_api` RPCs raise exceptions on validation errors (PostgREST returns detail/hint).
+- Internal supervisors/handlers return a standard JSON envelope with `success`, optional `validation_failure_message`, and optional `payload`. Use `validation_failure_message` for non-retriable validation issues.
+- Public `api.*` RPCs raise exceptions on validation errors with `detail`/`hint` for clients.
 
-### Example: enqueue and process email
+### Examples
 
 ```sql
--- App code: create and enqueue
-select *
-from comms.create_and_enqueue_email(
+-- Hello world email via public API (builds from template and schedules send)
+select api.hello_world_email('user@example.com');
+
+-- Direct internal kickoff (email)
+select comms.create_and_kickoff_email_task(
   _from_address => 'no-reply@example.com',
   _to_address   => 'user@example.com',
   _subject      => 'Welcome!',
   _html         => '<h1>Hello</h1>'
 );
+
+-- Hello world sms via public API
+select api.hello_world_sms('+15551234567');
 ```
 
-Worker fetches and processes via `service_api.fetch_next_task` and reports with `service_api.report_task_result` (see docs/worker.md).
+Worker processing details: see `docs/worker.md`.

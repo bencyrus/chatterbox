@@ -33,3 +33,5 @@ References
 
 - Base setup: [`1756072100_setup.sql`](1756072100_setup.sql)
 - Auth and RPCs: [`1756072325_basic_auth.sql`](1756072325_basic_auth.sql)
+- Queues and worker base: [`1756074000_base_queues_and_worker.sql`](1756074000_base_queues_and_worker.sql)
+- Comms schema, supervisors, handlers, and API: [`1756074200_comms_queue.sql`](1756074200_comms_queue.sql)
