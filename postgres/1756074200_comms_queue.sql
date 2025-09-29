@@ -89,83 +89,75 @@ begin
 end;
 $$;
 
--- result of creating an email message
-create type comms.create_email_message_result as (
-    validation_failure_message text,
-    message_id bigint
-);
-
--- create an email message with validation
 create or replace function comms.create_email_message(
     _from_address text,
     _to_address text,
     _subject text,
-    _html text
+    _html text,
+    out validation_failure_message text,
+    out created_message_id bigint
 )
-returns comms.create_email_message_result
+returns record
 language plpgsql
 security definer
 as $$
-declare
-    _message_id bigint;
 begin
     if _from_address is null then
-        return ('from_address_missing', null)::comms.create_email_message_result;
+        validation_failure_message := 'from_address_missing';
+        return;
     end if;
     if _to_address is null then
-        return ('to_address_missing', null)::comms.create_email_message_result;
+        validation_failure_message := 'to_address_missing';
+        return;
     end if;
     if _subject is null then
-        return ('subject_missing', null)::comms.create_email_message_result;
+        validation_failure_message := 'subject_missing';
+        return;
     end if;
     if _html is null then
-        return ('html_missing', null)::comms.create_email_message_result;
+        validation_failure_message := 'html_missing';
+        return;
     end if;
 
     insert into comms.message (channel)
     values ('email')
     returning message_id
-    into _message_id;
+    into created_message_id;
     
     insert into comms.email_message (message_id, from_address, to_address, subject, html)
-    values (_message_id, _from_address, _to_address, _subject, _html);
-    return (null, _message_id)::comms.create_email_message_result;
+    values (created_message_id, _from_address, _to_address, _subject, _html);
+    return;
 end;
 $$;
 
--- result of creating an sms message
-create type comms.create_sms_message_result as (
-    validation_failure_message text,
-    message_id bigint
-);
-
--- create an sms message with validation
 create or replace function comms.create_sms_message(
     _to_number text,
-    _body text
+    _body text,
+    out validation_failure_message text,
+    out created_message_id bigint
 )
-returns comms.create_sms_message_result
+returns record
 language plpgsql
 security definer
 as $$
-declare
-    _message_id bigint;
 begin
     if _to_number is null then
-        return ('to_number_missing', null)::comms.create_sms_message_result;
+        validation_failure_message := 'to_number_missing';
+        return;
     end if;
     if _body is null then
-        return ('body_missing', null)::comms.create_sms_message_result;
+        validation_failure_message := 'body_missing';
+        return;
     end if;
 
     insert into comms.message (channel)
     values ('sms')
     returning message_id
-    into _message_id;
+    into created_message_id;
 
     insert into comms.sms_message (message_id, to_number, body)
-    values (_message_id, _to_number, _body);
-    return (null, _message_id)::comms.create_sms_message_result;
+    values (created_message_id, _to_number, _body);
+    return;
 end;
 $$;
 
@@ -511,16 +503,12 @@ begin
 end;
 $$;
 
-create type comms.kickoff_send_email_task_result as (
-    validation_failure_message text
-);
-
--- kickoff: create send_email_task and enqueue supervisor
 create or replace function comms.kickoff_send_email_task(
     _message_id bigint,
-    _scheduled_at timestamp with time zone default now()
+    _scheduled_at timestamp with time zone default now(),
+    out validation_failure_message text
 )
-returns comms.kickoff_send_email_task_result
+returns text
 language plpgsql
 security definer
 as $$
@@ -529,11 +517,13 @@ declare
 begin
     -- validation
     if _message_id is null then
-        return ('missing_message_id')::comms.kickoff_send_email_task_result;
+        validation_failure_message := 'missing_message_id';
+        return;
     end if;
 
     if not comms.message_exists(_message_id) then
-        return ('message_not_found')::comms.kickoff_send_email_task_result;
+        validation_failure_message := 'message_not_found';
+        return;
     end if;
 
     -- output
@@ -552,46 +542,61 @@ begin
         _scheduled_at
     );
 
-    return (null)::comms.kickoff_send_email_task_result;
+    return;
 end;
 $$;
 
--- result of creating and kicking off an email task
-create type comms.create_and_kickoff_email_task_result as (
-    validation_failure_message text
-);
-
--- create email message and kickoff send_email_task
 create or replace function comms.create_and_kickoff_email_task(
     _from_address text,
     _to_address text,
     _subject text,
     _html text,
-    _scheduled_at timestamp with time zone default now()
+    _scheduled_at timestamp with time zone default now(),
+    out validation_failure_message text
 )
-returns comms.create_and_kickoff_email_task_result
+returns text
 language plpgsql
 security definer
 as $$
-declare
-    _create_email_result comms.create_email_message_result;
-    _kickoff_result comms.kickoff_send_email_task_result;
+ declare
+    _create_email_message_result record;
+    _kickoff_validation_failure_message text;
 begin
-    select comms.create_email_message(_from_address, _to_address, _subject, _html)
-    into _create_email_result;
-
-    if _create_email_result.validation_failure_message is not null then
-        return (_create_email_result.validation_failure_message)::comms.create_and_kickoff_email_task_result;
+    -- input validation (no exceptions here)
+    if _from_address is null then
+        validation_failure_message := 'from_address_missing';
+        return;
+    end if;
+    if _to_address is null then
+        validation_failure_message := 'to_address_missing';
+        return;
+    end if;
+    if _subject is null then
+        validation_failure_message := 'subject_missing';
+        return;
+    end if;
+    if _html is null then
+        validation_failure_message := 'html_missing';
+        return;
     end if;
 
-    select comms.kickoff_send_email_task(_create_email_result.message_id, _scheduled_at)
-    into _kickoff_result;
+    select (comms.create_email_message(_from_address, _to_address, _subject, _html)).*
+    into strict _create_email_message_result;
 
-    if _kickoff_result.validation_failure_message is not null then
-        return (_kickoff_result.validation_failure_message)::comms.create_and_kickoff_email_task_result;
+    if _create_email_message_result.validation_failure_message is not null then
+        validation_failure_message := _create_email_message_result.validation_failure_message;
+        return;
     end if;
 
-    return (null)::comms.create_and_kickoff_email_task_result;
+    select comms.kickoff_send_email_task(_create_email_message_result.created_message_id, _scheduled_at)
+    into strict _kickoff_validation_failure_message;
+
+    if _kickoff_validation_failure_message is not null then
+        validation_failure_message := _kickoff_validation_failure_message;
+        return;
+    end if;
+
+    return;
 end;
 $$;
 
@@ -869,16 +874,12 @@ begin
 end;
 $$;
 
-create type comms.kickoff_send_sms_task_result as (
-    validation_failure_message text
-);
-
--- kickoff: create send_sms_task and enqueue supervisor
 create or replace function comms.kickoff_send_sms_task(
     _message_id bigint,
-    _scheduled_at timestamp with time zone default now()
+    _scheduled_at timestamp with time zone default now(),
+    out validation_failure_message text
 )
-returns comms.kickoff_send_sms_task_result
+returns text
 language plpgsql
 security definer
 as $$
@@ -887,11 +888,13 @@ declare
 begin
     -- validation
     if _message_id is null then
-        return ('missing_message_id')::comms.kickoff_send_sms_task_result;
+        validation_failure_message := 'missing_message_id';
+        return;
     end if;
 
     if not comms.message_exists(_message_id) then
-        return ('message_not_found')::comms.kickoff_send_sms_task_result;
+        validation_failure_message := 'message_not_found';
+        return;
     end if;
 
     -- output
@@ -910,44 +913,51 @@ begin
         _scheduled_at
     );
 
-    return (null)::comms.kickoff_send_sms_task_result;
+    return;
 end;
 $$;
 
--- result of creating and kicking off an sms task
-create type comms.create_and_kickoff_sms_task_result as (
-    validation_failure_message text
-);
-
--- create sms message and kickoff send_sms_task
 create or replace function comms.create_and_kickoff_sms_task(
     _to_number text,
     _body text,
-    _scheduled_at timestamp with time zone default now()
+    _scheduled_at timestamp with time zone default now(),
+    out validation_failure_message text
 )
-returns comms.create_and_kickoff_sms_task_result
+returns text
 language plpgsql
 security definer
 as $$
-declare
-    _create_sms_result comms.create_sms_message_result;
-    _kickoff_result comms.kickoff_send_sms_task_result;
+ declare
+    _create_sms_message_result record;
+    _kickoff_sms_validation_failure_message text;
 begin
-    select comms.create_sms_message(_to_number, _body)
-    into _create_sms_result;
-
-    if _create_sms_result.validation_failure_message is not null then
-        return (_create_sms_result.validation_failure_message)::comms.create_and_kickoff_sms_task_result;
+    -- validation
+    if _to_number is null then
+        validation_failure_message := 'to_number_missing';
+        return;
+    end if;
+    if _body is null then
+        validation_failure_message := 'body_missing';
+        return;
     end if;
 
-    select comms.kickoff_send_sms_task(_create_sms_result.message_id, _scheduled_at)
-    into _kickoff_result;
+    select (comms.create_sms_message(_to_number, _body)).*
+    into strict _create_sms_message_result;
 
-    if _kickoff_result.validation_failure_message is not null then
-        return (_kickoff_result.validation_failure_message)::comms.create_and_kickoff_sms_task_result;
+    if _create_sms_message_result.validation_failure_message is not null then
+        validation_failure_message := _create_sms_message_result.validation_failure_message;
+        return;
     end if;
 
-    return (null)::comms.create_and_kickoff_sms_task_result;
+    select comms.kickoff_send_sms_task(_create_sms_message_result.created_message_id, _scheduled_at)
+    into strict _kickoff_sms_validation_failure_message;
+
+    if _kickoff_sms_validation_failure_message is not null then
+        validation_failure_message := _kickoff_sms_validation_failure_message;
+        return;
+    end if;
+
+    return;
 end;
 $$;
 
@@ -1002,7 +1012,7 @@ declare
     _params jsonb := jsonb_build_object('name', 'World');
     _subject text;
     _body text;
-    _result comms.create_and_kickoff_email_task_result;
+    _create_and_kickoff_email_task_validation_failure_message text;
 begin
     -- validate input
     if to_address is null or btrim(to_address) = '' then
@@ -1044,12 +1054,12 @@ begin
         _body,
         now()
     )
-    into _result;
+    into strict _create_and_kickoff_email_task_validation_failure_message;
 
-    if _result.validation_failure_message is not null then
+    if _create_and_kickoff_email_task_validation_failure_message is not null then
         raise exception 'Hello World Email Failed'
             using detail = 'Invalid Request Payload',
-                  hint = _result.validation_failure_message;
+                  hint = _create_and_kickoff_email_task_validation_failure_message;
     end if;
 
     return jsonb_build_object('success', true);
@@ -1067,7 +1077,7 @@ as $$
 declare
     _params jsonb := jsonb_build_object('name', 'World');
     _body text;
-    _result comms.create_and_kickoff_sms_task_result;
+    _create_and_kickoff_sms_task_validation_failure_message text;
 begin
     -- validate input
     if to_number is null or btrim(to_number) = '' then
@@ -1097,12 +1107,12 @@ begin
         _body,
         now()
     )
-    into _result;
+    into strict _create_and_kickoff_sms_task_validation_failure_message;
 
-    if _result.validation_failure_message is not null then
+    if _create_and_kickoff_sms_task_validation_failure_message is not null then
         raise exception 'Hello World SMS Failed'
             using detail = 'Invalid Request Payload',
-                  hint = _result.validation_failure_message;
+                  hint = _create_and_kickoff_sms_task_validation_failure_message;
     end if;
 
     return jsonb_build_object('success', true);
