@@ -4,6 +4,10 @@
 !.env.example
 !.env.*.example
 
+# Postgres backups
+postgres/backups/*
+!postgres/backups/.gitkeep
+
 # IDE and editor files
 .vscode/
 .idea/

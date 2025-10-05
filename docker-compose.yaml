@@ -13,6 +13,29 @@ services:
       - postgrest
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "gateway", "service": "gateway"}]'
+  postgres:
+    build:
+      context: .
+      dockerfile: ./postgres/Dockerfile
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./secrets/.env.postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/backups:/backups
+    networks:
+      - chattterbox-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "postgres", "service": "postgres"}]'
   postgrest:
     image: postgrest/postgrest:latest
     container_name: postgrest
@@ -24,6 +47,9 @@ services:
     # NO external ports - internal only for security
     networks:
       - chattterbox-network
+    depends_on:
+      postgres:
+        condition: service_healthy
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
@@ -90,13 +116,17 @@ services:
     networks:
       - chattterbox-network
     depends_on:
-      - postgrest
+      postgrest:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
 
 volumes:
   caddy_data:
   caddy_config:
+  postgres_data:
 
 networks:
   chattterbox-network:

@@ -13,7 +13,7 @@ create role authenticator
   nocreatedb
   nocreaterole
   nosuperuser
-  password 'your_strong_password_here';
+  password 'PostgRESTAuthenticator!2025';
 
 -- allow the authenticator to switch into either the anon or authenticated role
 grant anon to authenticator;
