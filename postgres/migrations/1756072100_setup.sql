@@ -13,7 +13,7 @@ create role authenticator
   nocreatedb
   nocreaterole
   nosuperuser
-  password 'PostgRESTAuthenticator!2025';
+  password 'secret_postgres_password';
 
 -- allow the authenticator to switch into either the anon or authenticated role
 grant anon to authenticator;
