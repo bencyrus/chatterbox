@@ -14,5 +14,3 @@ RUN chmod +x /usr/local/bin/pg-backup
 
 # Default exposes 5432 from base image
 EXPOSE 5432
-
-
