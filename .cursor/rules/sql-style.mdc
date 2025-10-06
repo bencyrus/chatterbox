@@ -12,9 +12,28 @@ alwaysApply: true
 - Add a one-line comment above each table/type/function stating purpose.
 
 - Prefer multi-line SQL for readability:
+
   - Put major clauses on separate lines: `select`, `from`, `join`, `where`, `group by`, `having`, `order by`, `limit`, `returning`.
   - Vertically list selected columns/expressions one per line under `select` (no trailing comma on the last item).
   - Single-item lists may remain inline with the directive: e.g., `select expr`, `order by expr`, `returning expr`.
+  - For single-item select lists, keep the expression on the same line as `select` (e.g., `select *`).
   - In plpgsql, place `into` on its own line immediately after the `select` list.
   - For `insert`, place the column list on one line (or wrapped), `values` on a new line, and `returning` on a new line; put `into` on its own line when capturing.
   - Wrap subqueries and `exists(...)` predicates, with their inner `select ... from ... where ...` split across lines per these rules.
+
+- Aliases:
+
+  - Avoid unnecessary table aliases; do not alias single-table queries.
+  - Use aliases only when required (self-joins, multiple references to the same table, or disambiguation across joins).
+  - Prefer unqualified column names when selecting from a single table.
+
+- Function calling and returns:
+  - Prefer functions that return concrete types (scalars or named composite types) so they can be called directly and assigned without `select`.
+  - Prefer direct assignment for function calls that return a single value/row: `_var := schema.function(args);` and `return schema.function(args);`.
+  - Avoid `select ... into` for function calls unless selecting from tables/views or set-returning functions; reserve `select ... into` for actual queries, not pure function calls.
+  - For simple getters, prefer `language sql` functions that directly `select a.* from ... where ...` and `returns concrete_type`, enabling direct assignment and direct return.
+  - When a function returns multiple OUT fields, prefer initializing a single `record` variable in DECLARE (e.g., `_r record := schema.function(args);`) and access fields via dot notation, instead of separate variables or `select ... into`.
+  - Prefer using the record's fields directly (e.g., `_r.field`) rather than copying them into separate local variables, unless multiple transformations make it clearer.
+  - Prefer accessing nested record fields inline when convenient: `(_r.nested_record).field`.
+  - Avoid calling functions with side effects in DECLARE. Prefer declaring the record variable and invoking the side-effecting function inside the BEGIN...END block. Pure validation or getters may be called in DECLARE.
+  - Prefer relying on getters to normalize inputs; avoid pre-normalizing arguments in callers when getters already do so.

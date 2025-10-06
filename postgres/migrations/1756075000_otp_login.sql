@@ -3,16 +3,16 @@ begin;
 -- add phone-based login and OTP support without altering existing basic auth behaviors
 
 -- add helper to allow nullable passwords to support passwordless accounts
-create or replace function auth.is_password_valid_or_null(_password text)
+create or replace function accounts.is_password_valid_or_null(_password text)
 returns boolean
 immutable
 language sql
 as $$
-    select case when $1 is null then true else auth.is_password_valid($1) end;
+    select case when $1 is null then true else accounts.is_password_valid($1) end;
 $$;
 
 -- phone validation and normalization helpers
-create or replace function auth.is_phone_valid(_phone text)
+create or replace function accounts.is_phone_valid(_phone text)
 returns boolean
 immutable
 language sql
@@ -21,53 +21,61 @@ as $$
     select $1 ~ '^\+?[1-9][0-9]{7,14}$';
 $$;
 
-create or replace function auth.is_phone_valid_or_null(_phone text)
+create or replace function accounts.is_phone_valid_or_null(_phone text)
 returns boolean
 immutable
 language sql
 as $$
-    select case when $1 is null then true else auth.is_phone_valid($1) end;
+    select case when $1 is null then true else accounts.is_phone_valid($1) end;
 $$;
 
-create or replace function auth.normalize_phone(_phone text)
+create or replace function accounts.normalize_phone(_phone text)
 returns text
 immutable
 language sql
 as $$
-    with cleaned as (
-        select regexp_replace(coalesce($1, ''), '[^0-9+]', '', 'g') as raw
-    )
-    select case when raw like '+%' then raw else '+' || raw end from cleaned;
+with cleaned as (
+    select regexp_replace(coalesce(_phone, ''), '[^0-9+]', '', 'g') as raw
+),
+formatted as (
+    select case
+        when raw = '' then null
+        when raw like '+%' then raw
+        else '+' || raw
+    end as normalized
+    from cleaned
+)
+select normalized from formatted;
 $$;
 
 -- alter account table: support phone_number, nullable password, and email-or-phone presence
-alter table auth.account
+alter table accounts.account
     add column if not exists phone_number text;
 
-alter table auth.account
+alter table accounts.account
     alter column email drop not null;
 
-alter table auth.account
+alter table accounts.account
     alter column hashed_password drop not null;
 
 -- replace password constraint to allow nulls
-alter table auth.account
+alter table accounts.account
     drop constraint if exists hashed_password_nonempty;
 
 alter table auth.account
     add constraint hashed_password_valid_or_null
-    check (auth.is_password_valid_or_null(hashed_password));
+    check (accounts.is_password_valid_or_null(hashed_password));
 
 -- phone validity check (email validity already enforced by existing constraint when present)
-alter table auth.account
+alter table accounts.account
     drop constraint if exists phone_number_valid;
 
-alter table auth.account
+alter table accounts.account
     add constraint phone_number_valid
-    check (auth.is_phone_valid_or_null(phone_number));
+    check (accounts.is_phone_valid_or_null(phone_number));
 
 -- require at least one of email or phone_number
-alter table auth.account
+alter table accounts.account
     add constraint email_or_phone_present
     check (email is not null or phone_number is not null);
 
@@ -76,7 +84,7 @@ alter table auth.account
 -- stores issued login codes per account (append-only)
 create table if not exists auth.otp_code (
     otp_code_id bigserial primary key,
-    account_id bigint not null references auth.account(account_id) on delete cascade,
+    account_id bigint not null references accounts.account(account_id) on delete cascade,
     code text not null,
     created_at timestamp with time zone not null default now()
 );
@@ -92,7 +100,7 @@ create table if not exists auth.otp_code_used (
 -- records failed verification attempts (append-only) for observability
 create table if not exists auth.otp_code_failed_attempt (
     otp_code_failed_attempt_id bigserial primary key,
-    account_id bigint references auth.account(account_id) on delete cascade,
+    account_id bigint references accounts.account(account_id) on delete cascade,
     code_attempted text not null,
     created_at timestamp with time zone not null default now()
 );
@@ -125,8 +133,7 @@ as $$
 $$;
 
 -- domain for account identifier types
-create domain auth.account_identifier_type as text
-    check (value in ('email', 'phone'));
+
 
 -- helper: determine account identifier type (email or phone) with validation
 create or replace function auth.get_account_identifier_type(
@@ -147,13 +154,13 @@ begin
         return;
     end if;
 
-    if auth.is_email_valid(_cleaned_identifier) then
+    if accounts.is_email_valid(_cleaned_identifier) then
         identifier_type := 'email';
         return;
     end if;
 
-    _normalized_phone := auth.normalize_phone(_cleaned_identifier);
-    if auth.is_phone_valid(_normalized_phone) then
+    _normalized_phone := accounts.normalize_phone(_cleaned_identifier);
+    if accounts.is_phone_valid(_normalized_phone) then
         identifier_type := 'phone';
         return;
     end if;
@@ -219,42 +226,42 @@ end;
 $$;
 
 -- internal: get account by email
-create or replace function auth.get_account_by_email(
+create or replace function accounts.get_account_by_email(
     _email text
 )
-returns auth.account
+returns accounts.account
 language sql
 as $$
-    select * from auth.account where email = lower(btrim(_email));
+    select * from accounts.account where email = lower(btrim(_email));
 $$;
 
 -- internal: get account by phone number
-create or replace function auth.get_account_by_phone_number(
+create or replace function accounts.get_account_by_phone_number(
     _phone text
 )
-returns auth.account
+returns accounts.account
 language sql
 as $$
-    select * from auth.account where phone_number = auth.normalize_phone(btrim(_phone));
+    select * from accounts.account where phone_number = accounts.normalize_phone(btrim(_phone));
 $$;
 
 -- internal: get or create account by email
-create or replace function auth.get_or_create_account_by_email(
+create or replace function accounts.get_or_create_account_by_email(
     _email text
 )
-returns auth.account
+returns accounts.account
 language plpgsql
 as $$
 declare
-    _existing_account auth.account;
-    _new_account auth.account;
+    _existing_account accounts.account;
+    _new_account accounts.account;
 begin
-    _existing_account := auth.get_account_by_email(_email);
+    _existing_account := accounts.get_account_by_email(_email);
     if _existing_account.account_id is not null then
         return _existing_account;
     end if;
 
-    insert into auth.account (email)
+    insert into accounts.account (email)
     values (_email)
     returning * into _new_account;
     return _new_account;
@@ -262,22 +269,22 @@ end;
 $$;
 
 -- internal: get or create account by phone number
-create or replace function auth.get_or_create_account_by_phone_number(
+create or replace function accounts.get_or_create_account_by_phone_number(
     _phone text
 )
-returns auth.account
+returns accounts.account
 language plpgsql
 as $$
 declare
-    _existing_account auth.account;
-    _new_account auth.account;
+    _existing_account accounts.account;
+    _new_account accounts.account;
 begin
-    _existing_account := auth.get_account_by_phone_number(_phone);
+    _existing_account := accounts.get_account_by_phone_number(_phone);
     if _existing_account.account_id is not null then
         return _existing_account;
     end if;
 
-    insert into auth.account (phone_number)
+    insert into accounts.account (phone_number)
     values (_phone)
     returning * into _new_account;
     return _new_account;
@@ -325,7 +332,7 @@ language plpgsql
 as $$
 declare
     _identifier_type auth.account_identifier_type := auth.get_account_identifier_type(identifier);
-    _account auth.account;
+    _account accounts.account;
 begin
     if _identifier_type.validation_failure_message is not null then
         raise exception 'OTP Request Failed'
@@ -334,9 +341,9 @@ begin
     end if;
 
     if _identifier_type = 'email' then
-        _account := auth.get_or_create_account_by_email(identifier);
+        _account := accounts.get_or_create_account_by_email(identifier);
     elsif _identifier_type = 'phone' then
-        _account := auth.get_or_create_account_by_phone_number(identifier);
+        _account := accounts.get_or_create_account_by_phone_number(identifier);
     end if;
 end;
 $$;
