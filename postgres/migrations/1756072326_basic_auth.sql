@@ -1,5 +1,3 @@
-begin;
-
 -- Extension to support UUIDs
 create extension if not exists "uuid-ossp";
 
@@ -48,22 +46,6 @@ $$;
 -- Token use domain: defines the types of tokens that can be used
 create domain auth.token_use as text
     check (value in ('access', 'refresh'));
-
--- seed the jwt config
-insert into internal.config (
-    key,
-    value
-)
-values (
-    'jwt',
-    '{
-        "secret": "your-secret-key",
-        "access_token_expiry_seconds": 3600,
-        "refresh_token_expiry_seconds": 86400,
-        "refresh_threshold_seconds": 3600
-    }'
-)
-on conflict (key) do nothing;
 
 -- JWT config function: retrieves the JWT config from the configuration table
 create or replace function auth.jwt_config(
@@ -426,5 +408,3 @@ select 'Hello, Authenticated!' as message;
 
 -- grant select permission only to authenticated role
 grant select on api.hello_secure to authenticated;
-
-commit;

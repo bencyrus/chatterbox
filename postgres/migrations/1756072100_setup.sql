@@ -1,5 +1,3 @@
-begin;
-
 -- create a role for unauthenticated users (no login)
 create role anon nologin;
 
@@ -13,7 +11,7 @@ create role authenticator
   nocreatedb
   nocreaterole
   nosuperuser
-  password 'secret_postgres_password';
+  password '{secrets.authenticator_password}';
 
 -- allow the authenticator to switch into either the anon or authenticated role
 grant anon to authenticator;
@@ -32,5 +30,3 @@ select 'Hello, World!' as message;
 
 -- grant select permission on the view to both roles
 grant select on api.hello_world to anon, authenticated;
-
-commit;

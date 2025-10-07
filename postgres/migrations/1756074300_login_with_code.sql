@@ -1,16 +1,3 @@
-begin;
-
--- seed internal config
-insert into internal.config (
-    key,
-    value
-)
-values (
-    'login_with_code',
-    '{"code_expiry_minutes": 5}'
-)
-on conflict (key) do nothing;
-
 -- seed login with code email template
 insert into comms.email_template (
     template_key,
@@ -164,7 +151,7 @@ begin
         end if;
 
         _kickoff_validation_failure_message := comms.create_and_kickoff_email_task(
-            'noreply@your-domain.com',
+            comms.from_email_address('noreply'),
             (_get_or_create_account_result.account).email,
             _render_email.subject,
             _render_email.body,
@@ -262,5 +249,3 @@ end;
 $$;
 
 grant execute on function api.login_with_code(text, text) to anon;
-
-commit;

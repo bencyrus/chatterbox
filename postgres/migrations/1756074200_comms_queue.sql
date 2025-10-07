@@ -1,11 +1,16 @@
-begin;
-
--- base comms schema and functions
-
 -- comms schema
 create schema comms;
 grant usage on schema comms to worker_service_user;
 
+create or replace function comms.from_email_address(
+    _key text
+)
+returns text
+stable
+language sql
+as $$
+    select (internal.get_config('from_emails') ->> _key)::text;
+$$;
 
 -- domain for communication channel kinds
 create domain comms.channel as text
@@ -1010,7 +1015,7 @@ language plpgsql
 security definer
 as $$
 declare
-    _from_address text := 'hello@your-domain.com';
+    _from_address text := comms.from_email_address('hello');
     _params jsonb := jsonb_build_object('name', 'World');
     _subject text;
     _body text;
@@ -1156,5 +1161,3 @@ as $$
     from comms.sms_template st
     where st.template_key = _template_key;
 $$;
-
-commit;

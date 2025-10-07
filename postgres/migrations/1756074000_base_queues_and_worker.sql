@@ -1,5 +1,3 @@
-begin;
-
 -- internal schemas for queues and function runner
 create schema queues;
 
@@ -122,5 +120,3 @@ $$;
 grant execute on function queues.dequeue_next_available_task() to worker_service_user;
 grant execute on function internal.run_function(text, jsonb) to worker_service_user;
 grant execute on function queues.append_error(bigint, text) to worker_service_user;
-
-commit;

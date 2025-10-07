@@ -1,5 +1,3 @@
-begin;
-
 -- Extension to support password hashing
 create extension if not exists pgcrypto;
 
@@ -345,5 +343,3 @@ begin
     return;
 end;
 $$;
-
-commit;
