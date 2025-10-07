@@ -21,14 +21,6 @@ create table auth.login_code_usage (
     used_at timestamp with time zone not null default now()
 );
 
--- Login code failed attempt table: stores failed login code attempts
-create table auth.login_code_failed_attempt (
-    login_code_failed_attempt_id bigserial primary key,
-    account_id bigint references accounts.account(account_id) on delete cascade,
-    code_attempted text not null,
-    created_at timestamp with time zone not null default now()
-);
-
 -- Generate login code function: generates a 6-digit login code
 create or replace function auth.generate_login_code()
 returns text
@@ -56,6 +48,22 @@ $$;
 -- Token use domain: defines the types of tokens that can be used
 create domain auth.token_use as text
     check (value in ('access', 'refresh'));
+
+-- seed the jwt config
+insert into internal.config (
+    key,
+    value
+)
+values (
+    'jwt',
+    '{
+        "secret": "your-secret-key",
+        "access_token_expiry_seconds": 3600,
+        "refresh_token_expiry_seconds": 86400,
+        "refresh_threshold_seconds": 3600
+    }'
+)
+on conflict (key) do nothing;
 
 -- JWT config function: retrieves the JWT config from the configuration table
 create or replace function auth.jwt_config(
@@ -248,9 +256,9 @@ $$;
 
 -- Signup function: creates an account and returns tokens
 create or replace function api.signup(
-    email text,
-    phone_number text,
-    password text
+    password text,
+    email text default null,
+    phone_number text default null
 )
 returns jsonb
 language plpgsql

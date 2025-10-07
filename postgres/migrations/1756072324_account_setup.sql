@@ -273,4 +273,77 @@ as $$
     where phone_number = accounts.normalize_phone(_phone_number);
 $$;
 
+-- Retrieve account by identifier (email or phone)
+create or replace function accounts.get_account_by_identifier(
+    _identifier text,
+    out validation_failure_message text,
+    out account accounts.account
+)
+returns record
+stable
+language plpgsql
+as $$
+declare
+    _identifier_type_result record := accounts.get_account_identifier_type(_identifier);
+begin
+    if _identifier_type_result.validation_failure_message is not null then
+        validation_failure_message := _identifier_type_result.validation_failure_message;
+        return;
+    end if;
+
+    if _identifier_type_result.identifier_type = 'email' then
+        account := accounts.get_account_by_email(_identifier);
+    else
+        account := accounts.get_account_by_phone_number(_identifier);
+    end if;
+    return;
+end;
+$$;
+
+-- Get or create account by identifier (email or phone)
+create or replace function accounts.get_or_create_account_by_identifier(
+    _identifier text,
+    out validation_failure_message text,
+    out account accounts.account
+)
+returns record
+language plpgsql
+security definer
+as $$
+declare
+    _get_account_result record := accounts.get_account_by_identifier(_identifier);
+    _identifier_type_result record := accounts.get_account_identifier_type(_identifier);
+    _create_result record;
+begin
+    if _get_account_result.validation_failure_message is not null then
+        validation_failure_message := _get_account_result.validation_failure_message;
+        return;
+    end if;
+
+    if (_get_account_result.account).account_id is not null then
+        account := _get_account_result.account;
+        return;
+    end if;
+
+    if _identifier_type_result.validation_failure_message is not null then
+        validation_failure_message := _identifier_type_result.validation_failure_message;
+        return;
+    end if;
+
+    if _identifier_type_result.identifier_type = 'email' then
+        _create_result := accounts.create_account(_identifier, null, null);
+    else
+        _create_result := accounts.create_account(null, _identifier, null);
+    end if;
+
+    if _create_result.validation_failure_message is not null then
+        validation_failure_message := _create_result.validation_failure_message;
+        return;
+    end if;
+
+    account := (_create_result.created_account);
+    return;
+end;
+$$;
+
 commit;

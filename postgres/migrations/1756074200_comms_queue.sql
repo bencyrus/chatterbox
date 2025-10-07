@@ -1124,4 +1124,37 @@ $$;
 grant execute on function api.hello_world_email(text) to anon, authenticated;
 grant execute on function api.hello_world_sms(text) to anon, authenticated;
 
+-- comms.render_email_template: renders subject and body for a template key
+create or replace function comms.render_email_template(
+    _template_key text,
+    _params jsonb,
+    out subject text,
+    out body text
+)
+returns record
+stable
+language sql
+as $$
+    select
+        comms.generate_message_body_from_template(et.subject, _params, et.body_params),
+        comms.generate_message_body_from_template(et.body, _params, et.body_params)
+    from comms.email_template et
+    where et.template_key = _template_key;
+$$;
+
+-- comms.render_sms_template: renders body for a template key
+create or replace function comms.render_sms_template(
+    _template_key text,
+    _params jsonb
+)
+returns text
+stable
+language sql
+as $$
+    select
+        comms.generate_message_body_from_template(st.body, _params, st.body_params)
+    from comms.sms_template st
+    where st.template_key = _template_key;
+$$;
+
 commit;
