@@ -1,0 +1,92 @@
+---
+description: Documentation style, truthfulness, navigation, and code-linked examples
+globs:
+  - docs/**/*.md
+  - README.md
+  - **/README.md
+alwaysApply: true
+---
+
+- Purpose and audience:
+
+  - Documentation serves two goals: teach engineers (learning material) and accurately reflect current system structure.
+  - Prioritize clarity and skimmability; keep content concise but complete enough to answer why and how.
+
+- Truthfulness and status:
+
+  - Do not claim features that are not implemented. Remove untrue statements instead of hedging.
+  - Aspirational content is allowed only under a clearly labeled Future section and must be explicitly marked as not implemented.
+  - Include a top metadata block (as plain text near the top):
+    - Status: current | placeholder | future
+    - Last verified: YYYY-MM-DD
+
+- Structure of every doc (recommended section order):
+
+  - Title (H2 `##`)
+  - Why this exists (brief rationale; link to requirements or design notes if any)
+  - Role in the system (what it does, inputs/outputs, dependencies)
+  - How it works (key flows, data, and components; keep to essentials)
+  - Operations (run, test, troubleshoot) when applicable
+  - Examples (prefer real examples from codebase)
+  - Future (clearly marked, optional; never framed as implemented)
+  - See also (related docs and directories)
+
+- Navigation rules:
+
+  - Every non-root doc starts with an inline back-link line: "← Back to <overview>" where <overview> is the appropriate higher-level doc (do not call it "parent").
+  - Always provide See also links at the bottom for lateral navigation.
+  - Prefer a single overview per subsystem (e.g., gateway, worker, postgres). Break out subpages only when they stand on their own; avoid many tiny pages.
+
+- Linking and references:
+
+  - When mentioning files, directories, functions, or classes, always link them using relative repository links. Use code-styled anchor text, e.g., `[\`gateway/internal/proxy/proxy.go\`](../../gateway/internal/proxy/proxy.go)`.
+  - When referencing concepts across docs, link to the specific Markdown file rather than naming it.
+  - Prefer linking to concrete files over quoting long excerpts; keep snippets minimal and accurate.
+
+- Examples policy:
+
+  - Prefer examples taken from the actual codebase (Go/SQL). Keep them minimal and runnable when applicable.
+  - For code samples in docs, use fenced code blocks with the correct language tag. Include a link immediately above or below the block to the source file.
+  - Keep examples aligned with current code; if code changes, update or remove the example.
+
+- Writing style and formatting:
+
+  - Lead with why, then how. Avoid chatter and marketing tone.
+  - Use `##` and `###` headings only (no `#`).
+  - Use short paragraphs and bullet lists. Keep sentences direct and active voice.
+  - Use backticks for identifiers (files, directories, functions, classes). Link file/directory mentions as above.
+
+- Accuracy maintenance:
+
+  - Verify that all links resolve and all referenced files/directories exist.
+  - Cross-check behavioral claims against current code and migrations; if uncertain, omit or move to Future.
+  - If code changed and important info is missing, add it succinctly (prefer describing the behavior and linking the implementation over duplicating code).
+
+- Scope and organization:
+
+  - Keep one clear overview per subsystem with subpages for distinct topics (e.g., channels like email/sms, or specific flows like login-with-code).
+  - Avoid splitting content unless each page can be read independently without forcing constant context switching.
+  - If a page is under ~150–200 words and not independently useful, consider merging it into the subsystem overview.
+
+- Alignment with repository conventions:
+
+  - Follow the SQL and supervisor/worker principles already documented. When describing flows, reflect the actual database-first orchestration and minimal worker responsibilities.
+  - When documenting SQL or PL/pgSQL, mirror the SQL style guide (lowercase keywords, snake_case, multi-line formatting) in examples.
+
+- Minimal templates (copy as needed):
+
+  - Top-of-file metadata:
+
+    - Status: current
+    - Last verified: YYYY-MM-DD
+
+  - Back-link line for subpages:
+
+    - ← Back to [\`docs/README.md\`](../README.md)
+
+  - Example reference pattern:
+
+    - Source: [\`gateway/internal/auth/refresher.go\`](../../gateway/internal/auth/refresher.go)
+    - ```go
+      // minimal, representative snippet that matches current code
+      ```
