@@ -1,23 +1,40 @@
 ## Chatterbox Documentation
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- A single entry point to understand Chatterbox’s architecture and how to build within it.
-- Links to deeper Postgres documentation and style guidance.
+### Why this exists
 
-What this system is
+- Provide a single, accurate entry point to the architecture and how to work within it.
+- Keep links to deeper subsystem docs and style guides in one place.
 
-- Postgres-first application: logic and public API live in the database (exposed via PostgREST). Go services are thin (gateway, worker, files) and defer business logic to SQL functions.
-- Workflows are orchestrated as supervisor-driven processes: append-only facts derive state; supervisors enqueue child tasks and may re-enqueue themselves; the worker only executes.
+### Role in the system
 
-Start here
+- Documentation overview for engineers building and operating Chatterbox.
+- Defines how subsystems fit together and where to learn more.
 
-- Concepts: [docs/concepts/README.md](concepts/README.md)
-- Postgres: [docs/postgres/README.md](postgres/README.md)
-- Gateway: [docs/gateway/README.md](gateway/README.md)
-- Worker: [docs/worker/README.md](worker/README.md)
-- Files: [docs/files/README.md](files/README.md)
+### How it works
 
-Notes on navigation
+- Postgres‑first application: public API and business logic live in the database, exposed via PostgREST.
+- Go services (gateway, worker, files) are thin and delegate business logic to SQL functions and supervisors.
+- Workflows are orchestrated as supervisor‑driven processes: append‑only facts derive state; supervisors enqueue child tasks and may re‑enqueue themselves; the worker executes tasks.
 
-- Each area has its own README with its own recommended reading order.
+### Start here
+
+- Concepts: [`docs/concepts/README.md`](concepts/README.md)
+- Postgres: [`docs/postgres/README.md`](postgres/README.md)
+- Gateway: [`docs/gateway/README.md`](gateway/README.md)
+- Worker: [`docs/worker/README.md`](worker/README.md)
+- Files: [`docs/files/README.md`](files/README.md)
+- Caddy (reverse proxy): [`docs/caddy/README.md`](caddy/README.md)
+
+### Operations
+
+- Runtime topology: [`docs/deploy/runtime-topology.md`](deploy/runtime-topology.md)
+- Backups & restore: [`docs/deploy/backups-restore.md`](deploy/backups-restore.md)
+
+### See also
+
+- SQL style guide: [`docs/postgres/sql-style-guide.md`](postgres/sql-style-guide.md)
+- Worker lifecycle: [`docs/worker/lifecycle.md`](worker/lifecycle.md)
+- Worker payloads: [`docs/worker/payloads.md`](worker/payloads.md)
