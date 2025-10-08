@@ -19,6 +19,49 @@ Last verified: 2025-10-08
 - Go services (gateway, worker, files) are thin and delegate business logic to SQL functions and supervisors.
 - Workflows are orchestrated as supervisor‑driven processes: append‑only facts derive state; supervisors enqueue child tasks and may re‑enqueue themselves; the worker executes tasks.
 
+### Documentation map
+
+- Concepts: [Core architectural ideas](concepts/README.md)
+
+  - Why the Supervisor Pattern: [Supervisors rationale](concepts/why-supervisor.md)
+
+- Postgres Architecture: [Database-first design](postgres/README.md)
+
+  - SQL Style Guide: [Conventions for migrations/functions](postgres/sql-style-guide.md)
+  - Security and Grants: [Roles and privileges](postgres/security.md)
+  - Queues and Worker: [DB queue and worker contract](postgres/queues-and-worker.md)
+  - Communications (email and SMS): [Data model, supervisors, handlers](postgres/comms.md)
+  - OTP Login (passwordless): [Flow and helpers](postgres/otp-login.md)
+  - Migrations and Secrets: [Applying migrations and env mapping](postgres/migrations-and-secrets.md)
+
+- Gateway: [Reverse proxy and edge logic](gateway/README.md)
+
+  - Gateway Auth Refresh: [Opportunistic token refresh](gateway/auth-refresh.md)
+  - Gateway File URL Injection: [Response enrichment for files](gateway/files-injection.md)
+
+- Worker: [Background task processor](worker/README.md)
+
+  - Worker Lifecycle: [Dequeue, dispatch, process](worker/lifecycle.md)
+  - Worker Task Payloads and Handlers: [Shapes and envelope](worker/payloads.md)
+  - Worker Email Processor: [Resend integration](worker/email.md)
+  - Worker SMS Processor: [Simulated provider](worker/sms.md)
+
+- Files Service: [Signed URL helper](files/README.md)
+
+- Caddy (Reverse Proxy): [Public entrypoint and correlation](caddy/README.md)
+
+- Shared Components: [Common libraries](shared/README.md)
+
+  - Shared Logger: [JSON logging API](shared/logger.md)
+  - Shared HTTP Middleware: [Request ID and access logs](shared/middleware.md)
+
+- Observability and Logging: [Datadog and correlation](observability/README.md)
+
+- Deploy and Operations: [Overview](deploy/README.md)
+
+  - Runtime Topology (Docker Compose): [Services, ports, network](deploy/runtime-topology.md)
+  - Backups and Restore: [Scripts and procedures](deploy/backups-restore.md)
+
 ### Start here
 
 - Concepts: [`docs/concepts/README.md`](concepts/README.md)
