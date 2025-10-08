@@ -1,17 +1,22 @@
 ## Queues and Worker
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/postgres/README.md`](./README.md)
+
+### Why this exists
 
 - Describe the generic queue, the worker contract, and the supervisor-driven orchestration pattern implemented in SQL.
 
-Core data model (queues)
+### Core data model (queues)
 
 - `queues.task`
   - Columns: `task_id`, `task_type` (`'db_function' | 'email' | 'sms'`), `payload jsonb`, `enqueued_at`, `scheduled_at`, `dequeued_at`.
 - `queues.error`
   - Append-only operational error log with `task_id` and `error_message`.
 
-Functions
+### Functions
 
 - `queues.enqueue(_task_type, _payload, _scheduled_at default now()) returns void`
   - Used by supervisors/handlers to schedule work; the worker never enqueues.
@@ -22,7 +27,7 @@ Functions
 - `internal.run_function(function_name text, payload jsonb) returns jsonb`
   - Security invoker runner that executes named functions (supervisors/handlers). Worker has execute on this and on whitelisted business functions (security definer).
 
-Worker lifecycle (Go)
+### Worker lifecycle (Go)
 
 - Lease a task via `queues.dequeue_next_available_task()` in its own transaction.
 - Dispatch by `task_type` to the appropriate processor:
@@ -31,7 +36,7 @@ Worker lifecycle (Go)
 - Always pass the full `payload jsonb` through; DB functions extract what they need.
 - Append operational errors to `queues.error` but avoid failing the overall worker loop.
 
-Standard JSON envelope (DBFunctionResult)
+### Standard JSON envelope (DBFunctionResult)
 
 ```json
 {
@@ -47,7 +52,7 @@ Standard JSON envelope (DBFunctionResult)
 - `validation_failure_message`: set for non-retriable validation issues; treated as non-fatal by the worker.
 - `payload`: optional typed data returned by `before_handler` calls.
 
-Supervisor pattern (ICO: Input → Compute → Output)
+### Supervisor pattern (ICO: Input → Compute → Output)
 
 - Supervisors orchestrate business processes using append-only facts.
 - Inputs: small facts functions like `has_*_succeeded(id)`, `count_*_failures(id)`, `count_*_scheduled(id)`.
@@ -55,7 +60,7 @@ Supervisor pattern (ICO: Input → Compute → Output)
 - Output: insert a `..._scheduled` fact, enqueue a channel task with handlers, and re-enqueue the supervisor.
 - Termination: exit when a terminal fact exists or attempts are exhausted.
 
-Email example (current implementation)
+### Email example (current implementation)
 
 - Root tables and facts: `comms.send_email_task`, `..._scheduled`, `..._failed`, `..._succeeded`.
 - Supervisor: `comms.send_email_supervisor(payload jsonb)`
@@ -66,7 +71,7 @@ Email example (current implementation)
     - `error_handler`: `comms.record_email_failure`
   - Re-enqueues itself based on exponential backoff from failures.
 
-Payload contracts (examples)
+### Payload contracts (examples)
 
 Supervisor task payload
 
@@ -90,7 +95,7 @@ Channel task payload (email)
 }
 ```
 
-Security and grants
+### Security and grants
 
 - Worker role: `worker_service_user`
   - Grants: usage on `queues`, `internal`, and business schemas; execute on `queues.dequeue_next_available_task`, `internal.run_function`, `queues.append_error`, and specific business functions it must call (supervisors/handlers).
@@ -99,13 +104,13 @@ Security and grants
 
 See comprehensive guidance in [Security and Grants](security.md) for revoke/grant patterns and role boundaries. This section focuses on the worker-specific permissions above.
 
-Operational notes
+### Operational notes
 
 - Dequeue and processing are separate transactions to avoid infinite retry loops on failure.
 - Use `for update skip locked` to prevent duplicate processing.
 - Supervisors/handlers perform all scheduling; the worker never enqueues tasks by itself.
 
-## Navigate
+### See also
 
 - Back to Postgres: [Postgres Index](README.md)
 - Worker details: [Worker Docs](../worker/README.md)

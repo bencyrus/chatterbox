@@ -1,10 +1,20 @@
 ## Postgres Architecture
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Describe the database-centric design: schemas, roles, public API via PostgREST, and where to find docs for each domain.
+← Back to [`docs/README.md`](../README.md)
 
-Schemas (by purpose)
+### Why this exists
+
+- Document the database‑centric design: schemas, roles, public API via PostgREST, and where to find domain docs.
+
+### Role in the system
+
+- Source of truth for logic, auth, and data. PostgREST exposes the HTTP API from DB schemas and functions.
+- Supervisors orchestrate workflows; the worker executes tasks with minimal privileges.
+
+### Schemas (by purpose)
 
 - `api`: public schema that exposes database objects by PostgREST. Functions are accessible at `/rpc/*` endpoints and views are at `/*`.
 - `accounts`: account data model and helpers (email/phone normalization, signup support, etc.).
@@ -13,13 +23,13 @@ Schemas (by purpose)
 - `internal`: configuration key-value store and the `internal.run_function(name, payload)` runner.
 - `comms`: communications (email/sms) data, templates, comms supervisors, and handlers.
 
-Roles
+### Roles
 
 - `anon`, `authenticated`: application roles assumed by PostgREST.
 - `authenticator`: PostgREST connection role (switches into `anon`/`authenticated`).
 - `worker_service_user`: dedicated worker role with minimal grants.
 
-Public API
+### Public API
 
 - PostgREST serves views and `api.*` functions.
 - Notable RPCs include:
@@ -33,7 +43,18 @@ Public API
   - `api.hello_world`
   - `api.hello_secure`
 
-Navigation
+### Configuration and secrets
+
+- Environment variables used by the Postgres service and migrations:
+  - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `PGTZ` (container timezone)
+  - `AUTHENTICATOR_PASSWORD` (used by migrations to set the `authenticator` role password)
+  - `JWT_SECRET` (seeded into `internal.config('jwt')`)
+  - `HELLO_EMAIL`, `NOREPLY_EMAIL` (seeded into `internal.config('from_emails')`)
+- Sources:
+  - Compose: [`docker-compose.yaml`](../../docker-compose.yaml)
+  - Migrations seeding config: [`postgres/migrations/1756072325_config_setup.sql`](../../postgres/migrations/1756072325_config_setup.sql)
+
+### See also
 
 - Basics first:
   - [SQL Style Guide](sql-style-guide.md)
@@ -43,4 +64,3 @@ Navigation
   - [Migrations and Secrets](migrations-and-secrets.md)
 - Security/grants:
   - See: [Security and Grants](security.md)
-- Back to Postgres: [Postgres Index](../README.md)

@@ -1,17 +1,22 @@
 ## SQL Style Guide
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/postgres/README.md`](./README.md)
+
+### Why this exists
 
 - Codify conventions used across migrations and functions to maximize readability, safety, and maintainability.
 
-General
+### General
 
 - Use lowercase SQL keywords and snake_case identifiers.
 - Schemas are plural nouns (e.g., `queues`, `comms`, `auth`, `accounts`, `internal`, `api`).
 - Avoid deletes/updates for business facts. Prefer append-only tables and derive state with queries and uniqueness constraints.
 - Use domains for small enumerations; keep names descriptive and consistent.
 
-Formatting
+### Formatting
 
 - Prefer multi-line SQL:
   - Put major clauses on separate lines: `select`, `from`, `join`, `where`, `group by`, `having`, `order by`, `limit`, `returning`.
@@ -21,13 +26,13 @@ Formatting
   - For `insert`, place the column list on one line (or wrapped), `values` on a new line, and `returning` on a new line; put `into` on its own line when capturing.
   - Wrap subqueries and `exists (...)` predicates; apply the same multi-line rules inside.
 
-Aliases
+### Aliases
 
 - Avoid unnecessary table aliases; do not alias single-table queries.
 - Use aliases only when required (self-joins, multi-reference joins, or disambiguation).
 - Prefer unqualified column names when selecting from a single table.
 
-Function design
+### Function design
 
 - Prefer returning scalars or multiple OUT parameters (avoid named composite types) so callers can assign directly without `select`.
 - Prefer direct assignment for single-value or OUT-returning functions: `_var := schema.function(args);` and `return schema.function(args);`.
@@ -38,15 +43,15 @@ Function design
 - Avoid calling functions with side effects in `declare`; perform side effects in the `begin...end` block. Pure getters may be called in `declare`.
 - Rely on getters to normalize inputs; avoid pre-normalizing in callers when getters already handle it.
 
-Patterns
+### Patterns
 
 - Consolidated facts helper (optional): For complex supervisors, consider a single read-only helper that aggregates the latest facts into a compact record (e.g., counts, has_terminal). Keep it idempotent; make decisions in the supervisor and perform outputs there (insert facts, enqueue tasks).
 
-Further reading
+### Further reading
 
 - For architecture, worker contracts, and payload conventions see `docs/postgres/queues-and-worker.md`.
 - For roles, grants, and security conventions see `docs/postgres/security.md`.
 
-## Navigate
+### See also
 
 - Back to Postgres: [Postgres Index](README.md)

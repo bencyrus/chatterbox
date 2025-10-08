@@ -1,10 +1,15 @@
 ## Security and Grants
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/postgres/README.md`](./README.md)
+
+### Why this exists
 
 - Centralize guidance on roles, privileges, `security definer`/`security invoker`, and safe grants across schemas.
 
-Principles
+### Principles
 
 - Prefer least privilege and explicit per-function grants.
 - Revoke broad `public` execute on internal schemas; grant narrowly to service roles.
@@ -12,13 +17,13 @@ Principles
 - Keep the function runner as `security invoker` and avoid direct table grants to the worker.
 - Limit PostgREST-facing roles to `api` schema only.
 
-Roles and boundaries
+### Roles and boundaries
 
 - Application roles via PostgREST: `anon`, `authenticated` (limited to `api` views and functions).
 - Connection role: `authenticator` (switches into `anon`/`authenticated`).
 - Worker role: `worker_service_user` (minimal grants to dequeue tasks and call allowed business functions).
 
-Recommended revokes and grants (example)
+### Recommended revokes and grants (example)
 
 ```sql
 -- revoke broad function execute; prefer explicit, per-role grants
@@ -42,12 +47,12 @@ grant usage on schema api to anon, authenticated;
 grant execute on all functions in schema api to anon, authenticated;
 ```
 
-Notes
+### Notes
 
 - Favor targeted grants per function rather than schema-wide executes for internal schemas.
 - Keep internal-only helpers outside `api` and avoid exposing them via PostgREST.
 
-## Navigate
+### See also
 
 - Back to Postgres: [Postgres Index](README.md)
 - Queues/worker contract: [Queues and Worker](queues-and-worker.md)

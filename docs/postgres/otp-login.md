@@ -1,23 +1,28 @@
 ## OTP Login (passwordless)
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/postgres/README.md`](./README.md)
+
+### Why this exists
 
 - Document the passwordless one-time code login flow that complements basic auth, including data model, helpers, API, delivery via comms, and behaviors.
 
-Highlights
+### Highlights
 
 - Identifiers: email or E.164 phone number; accounts may have either or both.
 - Codes: 6-digit numeric; validity window from config (`internal.config` → key `login_with_code` → `code_expiry_minutes`, default 5).
 - Delivery: via `comms` system (email or SMS) using templates; scheduling is asynchronous.
 - Verification: accepts the latest unused code, within TTL.
 
-Data model
+### Data model
 
 - `accounts.account`: base account; constraints validate email/phone and require at least one.
 - `auth.login_code`: issued codes `(login_code_id, account_id, code, created_at)`.
 - `auth.login_code_usage`: usage facts `(login_code_usage_id, login_code_id unique, used_at)`.
 
-Helpers
+### Helpers
 
 - Identifier handling: `accounts.get_account_identifier_type`, `accounts.get_account_by_identifier`, `accounts.get_or_create_account_by_identifier`.
 - Codes: `auth.generate_login_code()`, `auth.code_expiry_minutes()`.
@@ -26,7 +31,7 @@ Helpers
 - Record usage: `auth.record_login_code_usage(login_code_id)`.
 - Record login: `auth.record_account_login(account_id)`.
 
-API
+### API
 
 - Request code
 
@@ -53,11 +58,11 @@ Templates (seeded)
 - Email: `login_with_code` subject/body include `${code}` and `${minutes}`.
 - SMS: `login_with_code` body includes `${code}` and `${minutes}`.
 
-Notes
+### Notes
 
 - Delivery is scheduled asynchronously; the request itself is synchronous.
 - Comm templates are rendered with `comms.render_email_template` and `comms.render_sms_template` using params `{ code, minutes }`.
 
-## Navigate
+### See also
 
 - Back to Postgres: [Postgres Index](README.md)
