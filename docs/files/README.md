@@ -1,42 +1,81 @@
 ## Files Service
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Resolve file identifiers into URLs for client use; called by the gateway when upstream JSON includes a top‑level files array.
+← Back to [`docs/README.md`](../README.md)
 
-Philosophy
+### Why this exists
 
-- Keep business state and orchestration in Postgres; keep edge concerns (auth, URL shaping) at the boundary.
-- The gateway sees the full JSON responses and is the best place to enrich them non‑intrusively. By passing just a `files` array to a dedicated helper, we:
-  - Avoid coupling API schemas to provider details for signing.
-  - Keep the worker and supervisors focused on domain facts, not file IO.
-  - Allow swapping URL signing strategies (S3, GCS, CDN) without changing database functions.
-- This small service is intentionally stateless and easy to harden; it produces URLs based on IDs the API already surfaced.
+- Resolve file identifiers into client‑consumable URLs without changing database schemas or PostgREST responses.
+- Keep URL generation/signing concerns at the edge so the database remains focused on domain facts.
 
-Endpoints
+### Role in the system
 
-- POST `/signed_url`: body `{ "files": [ ... ] }` → returns an array of `{ file_id, url }`.
-- GET `/healthz`: liveness probe; returns `ok`.
+- Stateless helper called by the gateway when upstream JSON includes a top‑level `files` array.
+- Returns a JSON structure that the gateway injects as `processed_files` while preserving the original `files` field.
 
-Behavior
+### How it works
 
-- Supports string and numeric IDs; ignores invalid/empty entries.
-- Returns `[]` when no valid inputs are provided.
-- Logs include `request_id` when forwarded from the gateway.
+- Endpoint behavior
 
-Integration with PostgREST flow
+  Source: [`files/cmd/files/main.go`](../../files/cmd/files/main.go)
 
-- The database (via PostgREST) returns response objects that may include a top‑level `files` array of opaque IDs.
-- The gateway, after proxying the request to PostgREST, inspects JSON and, if `files` exists, calls this service.
-- The gateway then injects `processed_files` into the same JSON payload and forwards the response.
-- No DB schema changes are required to add or remove URL enrichment; it’s a pure edge concern.
+  ```go
+  mux := http.NewServeMux()
+  mux.HandleFunc("/signed_url", handleSignedURL())
+  mux.HandleFunc("/healthz", handleHealthz())
+  handler := middleware.RequestIDMiddleware(mux)
+  srv := &http.Server{Addr: ":" + cfg.Port, Handler: handler}
+  ```
 
-Configuration
+- Signed URL handler (placeholder implementation)
 
-- `PORT` (optional, default `8080`).
+  Source: [`files/cmd/files/main.go`](../../files/cmd/files/main.go)
 
-Navigate
+  ```go
+  var body map[string]any
+  if err := json.NewDecoder(r.Body).Decode(&body); err != nil { /* 400 */ }
+  items, ok := body["files"].([]any)
+  // Build [{ file_id, url }] with placeholder URL per item
+  ```
+
+### Behavior
+
+- Supports string and numeric file IDs; ignores invalid/empty entries.
+- Returns an empty array `[]` when no valid inputs are provided.
+- Includes `request_id` in logs when forwarded by upstream via `X-Request-ID`.
+
+### Operations
+
+- Port: `PORT` (optional, default `8080`).
+- Build/run: [`files/Dockerfile`](../../files/Dockerfile)
+
+### Examples
+
+- Request
+  ```json
+  { "files": ["abc123", 42] }
+  ```
+- Response (placeholder URLs)
+  ```json
+  [
+    {
+      "file_id": "abc123",
+      "url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba"
+    },
+    {
+      "file_id": 42,
+      "url": "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba"
+    }
+  ]
+  ```
+
+### Future
+
+- Replace placeholder URLs with real signing (e.g., S3, GCS, CDN). Not implemented.
+
+### See also
 
 - Gateway file URL injection: [`../gateway/files-injection.md`](../gateway/files-injection.md)
 - Shared components: [`../shared/README.md`](../shared/README.md)
-- Docs index: [`../README.md`](../README.md)
