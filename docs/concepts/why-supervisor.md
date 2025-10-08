@@ -1,5 +1,12 @@
 ## Why the Supervisor Pattern
 
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/concepts/README.md`](./README.md)
+
+### Why this exists
+
 We use supervisors because real systems spend most of their time waiting: on networks, providers, users, or other events. The question is not whether we wait, but where we absorb that waiting and how we keep the system understandable while we do.
 
 ### The real trade‑off: where to put variability
@@ -38,7 +45,7 @@ Under load, small supervised steps degrade gracefully. Because state is derived 
 
 This is why we use supervisors: to keep waiting out of request threads, keep decisions close to the truth, and move forward one safe step at a time.
 
-Navigate
+### See also
 
-- Back to docs: [Docs Index](README.md)
-- Concepts: [Concepts](concepts/README.md)
+- Postgres supervisors and queues: [`../postgres/queues-and-worker.md`](../postgres/queues-and-worker.md)
+- Comms example (email): [`../postgres/comms.md`](../postgres/comms.md)
