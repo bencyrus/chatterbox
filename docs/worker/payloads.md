@@ -1,10 +1,15 @@
 ## Worker Task Payloads and Handlers
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Define the standard task payload expectations and the generic handler lifecycle used by all worker‑processed tasks.
+← Back to [`docs/worker/README.md`](./README.md)
 
-Task types and shapes
+### Why this exists
+
+- Define the standard task payload shapes and handler lifecycle used by all worker‑processed tasks.
+
+### Task types and shapes
 
 - DB function task (pure database step)
 
@@ -28,7 +33,7 @@ Task types and shapes
 }
 ```
 
-Standard function result envelope
+### Standard function result envelope
 
 ```json
 {
@@ -39,7 +44,7 @@ Standard function result envelope
 }
 ```
 
-Lifecycle (how the worker executes)
+### Lifecycle (how the worker executes)
 
 - DB function
 
@@ -55,14 +60,14 @@ Lifecycle (how the worker executes)
     - On provider success → call `success_handler({ original_payload, worker_payload })`.
     - On provider error → append `queues.error(task_id, message)` and call `error_handler({ original_payload, error })`.
 
-Expectations
+### Expectations
 
 - The worker never enqueues tasks; supervisors/handlers in SQL schedule work via `queues.enqueue`.
 - Payloads should include a single resource identifier that the DB can use to fetch facts and enforce idempotency.
 - Providers and handlers must be idempotent; supervisors derive state from append‑only facts and uniqueness constraints.
 - The worker forwards the full original task payload to all handlers; handlers extract what they need.
 
-Example (comms: send email)
+### Example (comms: send email)
 
 - Supervisor task (db function)
 
@@ -90,7 +95,7 @@ Example (comms: send email)
   - Before builds provider payload `{ message_id, from_address, to_address, subject, html }`.
   - Worker calls email provider (Resend). On success → `success_handler({ original_payload, worker_payload })`; on failure → append `queues.error` and call `error_handler({ original_payload, error })`.
 
-Navigate
+### See also
 
 - Lifecycle: [`./lifecycle.md`](./lifecycle.md)
 - Email: [`./email.md`](./email.md)
