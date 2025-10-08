@@ -1,39 +1,67 @@
 ## Gateway File URL Injection
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Enrich JSON responses by resolving file IDs to URLs when the payload includes a top‑level files array.
+← Back to [`docs/gateway/README.md`](./README.md)
 
-How it works
+### Why this exists
 
-- The reverse proxy inspects successful JSON responses; if `Content-Type` includes `application/json`, it buffers the body.
-- It unmarshals to a generic object and checks for a top‑level array named by `FILES_FIELD_NAME`.
-- If present (and non‑empty), it POSTs `{ files: [...] }` to the files service at `FILE_SERVICE_URL + FILE_SIGNED_URL_PATH`.
-- On success, it adds a field named by `PROCESSED_FILES_FIELD_NAME` to the original object with the service’s JSON response and re‑serializes the body.
-- On any error, it restores the original body unmodified.
+- Provide user‑friendly file URLs without changing database schemas or PostgREST responses.
 
-Key code paths
+### How it works
 
-- Body processing: `internal/files/helpers.go` → `ProcessFileURLsIfNeeded` (safely replace/restore body and `Content-Length`).
-- Injection logic: `internal/files/processor.go` → `InjectSignedFileURLs` (detects field, calls service, mutates JSON object).
-- Proxy integration: `internal/proxy/proxy.go` → `ModifyResponse` calls the helpers.
+- On successful JSON responses (`Content-Type` includes `application/json`), buffer and inspect the body.
+- If a top‑level array named by `FILES_FIELD_NAME` exists and is non‑empty, POST `{ files: [...] }` to `FILE_SERVICE_URL + FILE_SIGNED_URL_PATH`.
+- On success, add `PROCESSED_FILES_FIELD_NAME` with the service’s response while keeping the original JSON intact; on any error, restore the original body.
 
-Configuration (env)
+### Key code paths
 
-- `FILE_SERVICE_URL` (required): files service base URL.
-- `FILE_SIGNED_URL_PATH` (required): path to signed URL endpoint (e.g., `/signed_url`).
-- `FILES_FIELD_NAME` (required): name of the top‑level array (e.g., `files`).
-- `PROCESSED_FILES_FIELD_NAME` (required): field name to inject (e.g., `processed_files`).
-- `HTTP_CLIENT_TIMEOUT_SECONDS` (optional): timeout for the call to the files service.
+- Body processing: [`gateway/internal/files/helpers.go`](../../gateway/internal/files/helpers.go)
+  ```go
+  fileops.ProcessFileURLsIfNeeded(ctx, cfg, resp)
+  ```
+- Injection logic: [`gateway/internal/files/processor.go`](../../gateway/internal/files/processor.go)
+  ```go
+  var generic map[String]any
+  if err := json.Unmarshal(body, &generic); err != nil { return body, nil }
+  filesRaw, ok := generic[cfg.FilesFieldName]
+  if !ok { return body, nil }
+  filesSlice, ok := filesRaw.([]any)
+  if !ok || len(filesSlice) == 0 { return body, nil }
+  // POST { files: [...] } to file service and inject cfg.ProcessedFilesFieldName
+  ```
+- Proxy integration: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+  ```go
+  ModifyResponse: func(resp *http.Response) error {
+      fileops.ProcessFileURLsIfNeeded(ctx, g.cfg, resp)
+      return nil
+  }
+  ```
 
-Safety/behavior
+### Configuration (env)
+
+- Required: `FILE_SERVICE_URL`, `FILE_SIGNED_URL_PATH`, `FILES_FIELD_NAME`, `PROCESSED_FILES_FIELD_NAME`.
+- Optional: `HTTP_CLIENT_TIMEOUT_SECONDS` (default derived from config, e.g., `10`).
+
+### Safety/behavior
 
 - Only processes `application/json` responses containing the configured top‑level array.
-- Does not fail the main request; on any error or non‑2xx from the files service, the original body is preserved.
-- `Content-Length` header is updated to match any mutated body.
+- Does not fail the main request; original body is preserved on any error or non‑2xx from the files service.
+- Updates `Content-Length` to match any mutated body.
 
-Navigate
+### See also
 
 - Auth refresh: [`./auth-refresh.md`](./auth-refresh.md)
 - Files service: [`../files/README.md`](../files/README.md)
 - Gateway index: [`./README.md`](./README.md)
+
+### Example
+
+```json
+{
+  "files": ["abc123", "def456"],
+  "other": "fields"
+}
+// → Gateway adds { "processed_files": ... } while keeping "files"
+```

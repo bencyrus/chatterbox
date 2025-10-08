@@ -1,44 +1,69 @@
 ## Gateway Auth Refresh
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Refresh access/refresh tokens opportunistically when the access token is near expiry, without blocking the main request.
+← Back to [`docs/gateway/README.md`](./README.md)
 
-How it works
+### Why this exists
 
-- Parse Authorization bearer using the configured `JWT_SECRET` to read `exp`.
-- If seconds remaining ≤ `REFRESH_THRESHOLD_SECONDS` and a refresh token header is present, start a preflight refresh with a short timeout (2s budget).
-- On success, attach refreshed tokens to the downstream response headers; the main proxied request proceeds regardless of refresh outcome.
+- Keep access tokens fresh without adding latency or coupling to the main request path.
 
-Key code paths
+### How it works
 
-- Token parsing: `internal/auth/helpers.go` → `AccessTokenSecondsRemaining`, `ShouldRefreshAccessToken`.
-- Preflight refresh: `internal/auth/helpers.go` → `PreflightRefresh` (2s timeout), `AttachRefreshedTokens`.
-- Refresh RPC: `internal/auth/refresher.go` → `RefreshIfPresent` POSTs to `POSTGREST_URL + REFRESH_TOKENS_PATH`, expects `{ access_token, refresh_token }`.
-- Proxy integration: `internal/proxy/proxy.go` → `ModifyResponse` attaches new tokens if present.
+- Parse `Authorization: Bearer <token>` using `JWT_SECRET` (HS256) to read `exp`.
+- If seconds remaining ≤ `REFRESH_THRESHOLD_SECONDS` and a refresh header is present, attempt a preflight refresh with ~2s timeout.
+- On success, attach refreshed tokens to response headers; the proxied request proceeds regardless of refresh outcome.
 
-Configuration (env)
+### Key code paths
 
-- `POSTGREST_URL` (required): PostgREST base URL.
-- `JWT_SECRET` (required): used to parse access token `exp`.
-- `REFRESH_TOKENS_PATH` (required): RPC path (e.g., `/rpc/refresh_tokens`).
-- `REFRESH_THRESHOLD_SECONDS` (required): seconds remaining to trigger preflight refresh.
-- `REFRESH_TOKEN_HEADER_IN` (optional, default `X-Refresh-Token`): incoming refresh header.
-- `NEW_ACCESS_TOKEN_HEADER_OUT` (optional, default `X-New-Access-Token`): outgoing header with new access token.
-- `NEW_REFRESH_TOKEN_HEADER_OUT` (optional, default `X-New-Refresh-Token`): outgoing header with new refresh token.
-- `HTTP_CLIENT_TIMEOUT_SECONDS` (optional, default `10`): refresh HTTP client timeout.
+- Token parsing & decision: [`gateway/internal/auth/helpers.go`](../../gateway/internal/auth/helpers.go)
+  ```go
+  remaining, ok := AccessTokenSecondsRemaining(cfg, headers, now)
+  if ok && remaining <= cfg.RefreshThresholdSeconds { /* refresh */ }
+  ```
+- Proxy preflight refresh: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+  ```go
+  var refreshed *auth.RefreshResult
+  if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
+      refreshed = auth.PreflightRefresh(ctx, g.cfg, r.Header, 2*time.Second)
+  }
+  ```
+- Refresh RPC: [`gateway/internal/auth/refresher.go`](../../gateway/internal/auth/refresher.go)
+  ```go
+  // POST to POSTGREST_URL + REFRESH_TOKENS_PATH expecting { access_token, refresh_token }
+  ```
+- Proxy integration: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+  ```go
+  auth.AttachRefreshedTokens(resp.Header, g.cfg, refreshed)
+  ```
 
-Headers
+### Configuration (env)
+
+- Required: `POSTGREST_URL`, `JWT_SECRET`, `REFRESH_TOKENS_PATH`, `REFRESH_THRESHOLD_SECONDS`.
+- Optional: `REFRESH_TOKEN_HEADER_IN` (default `X-Refresh-Token`), `NEW_ACCESS_TOKEN_HEADER_OUT` (default `X-New-Access-Token`), `NEW_REFRESH_TOKEN_HEADER_OUT` (default `X-New-Refresh-Token`), `HTTP_CLIENT_TIMEOUT_SECONDS` (default `10`).
+
+### Headers
 
 - Incoming: `Authorization: Bearer <access>`, `X-Refresh-Token: <refresh>`.
 - Outgoing (if refreshed): `X-New-Access-Token`, `X-New-Refresh-Token`.
 
-Behavior notes
+### Example
 
-- Refresh is best‑effort; failure never blocks or fails the proxied request.
-- Only attempts refresh when both: access token is near expiry and the refresh header is present.
+```bash
+curl -i \
+  -H "Authorization: Bearer <access>" \
+  -H "X-Refresh-Token: <refresh>" \
+  http://localhost:8080/any/path
+# If refreshed, response includes: X-New-Access-Token, X-New-Refresh-Token
+```
 
-Navigate
+### Behavior notes
+
+- Best‑effort: failure never blocks the proxied request.
+- Only attempts refresh when both conditions are met (near expiry and refresh header present).
+
+### See also
 
 - File URL injection: [`./files-injection.md`](./files-injection.md)
 - Gateway index: [`./README.md`](./README.md)

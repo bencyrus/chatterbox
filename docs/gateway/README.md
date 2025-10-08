@@ -1,20 +1,53 @@
 ## Gateway
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- Reverse proxy to PostgREST with two responsibilities: best‑effort token refresh and file URL post‑processing.
+← Back to [`docs/README.md`](../README.md)
 
-Philosophy
+### Why this exists
 
-- Edge responsibilities belong at the edge: token freshness and response enrichment are handled here to keep the database API stable and focused.
-- The gateway does not alter business logic; it performs safe, fail‑open enhancements:
-  - Token refresh is best‑effort and never blocks the proxied request.
-  - File URL injection preserves original fields and only adds `processed_files`.
-- This separation lets PostgREST remain a thin lens over database state while the gateway handles protocol and UX concerns.
+- Keep PostgREST focused on exposing database state while handling edge concerns here.
+- Improve UX by refreshing tokens opportunistically and enriching JSON responses with signed file URLs.
 
-Read next
+### Role in the system
 
-- Auth refresh flow: [`./auth-refresh.md`](./auth-refresh.md)
+- Reverse proxy in front of PostgREST.
+- Responsibilities:
+  - Best‑effort token refresh when access token is near expiry.
+  - Inject signed file URLs into JSON responses that contain a configured top‑level files array.
+- Fail‑safe: enhancements never block or fail the main proxied request.
+
+### How it works
+
+- At a high level, the gateway:
+  - Proxies requests to PostgREST.
+  - Optionally refreshes tokens preflight based on expiry.
+  - Optionally enriches JSON responses with signed file URLs.
+  - For detailed flows, see the child pages below.
+
+### Operations
+
+- Port: `PORT` (default `8080`).
+- Upstream: `POSTGREST_URL` (e.g., `http://postgrest:3000`).
+- Env (required): `POSTGREST_URL`, `JWT_SECRET`, `REFRESH_TOKENS_PATH`, `REFRESH_THRESHOLD_SECONDS`, `FILE_SERVICE_URL`, `FILE_SIGNED_URL_PATH`, `FILES_FIELD_NAME`, `PROCESSED_FILES_FIELD_NAME`.
+- Env (optional): `PORT`, `REFRESH_TOKEN_HEADER_IN` (default `X-Refresh-Token`), `NEW_ACCESS_TOKEN_HEADER_OUT` (default `X-New-Access-Token`), `NEW_REFRESH_TOKEN_HEADER_OUT` (default `X-New-Refresh-Token`), `HTTP_CLIENT_TIMEOUT_SECONDS` (default `10`).
+- Configuration source: [`gateway/internal/config/config.go`](../../gateway/internal/config/config.go)
+- Build/run: [`gateway/Dockerfile`](../../gateway/Dockerfile)
+
+### Examples
+
+- See detailed examples in:
+  - Auth refresh: [`./auth-refresh.md`](./auth-refresh.md)
+  - File URL injection: [`./files-injection.md`](./files-injection.md)
+
+### Future
+
+- None at this time.
+
+### See also
+
+- Auth refresh: [`./auth-refresh.md`](./auth-refresh.md)
 - File URL injection: [`./files-injection.md`](./files-injection.md)
 - Shared components: [`../shared/README.md`](../shared/README.md)
 - Docs index: [`../README.md`](../README.md)
