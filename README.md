@@ -1,53 +1,41 @@
 # Chatterbox Documentation Map
 
-- Concepts
+- [Concepts](docs/concepts/README.md)
 
-  - [`docs/concepts/README.md`](docs/concepts/README.md)
-  - Why Supervisors: [`docs/concepts/why-supervisor.md`](docs/concepts/why-supervisor.md)
+  - [Why the Supervisor Pattern](docs/concepts/why-supervisor.md)
 
-- Postgres
+- [Postgres](docs/postgres/README.md)
 
-  - Overview: [`docs/postgres/README.md`](docs/postgres/README.md)
-  - SQL Style Guide: [`docs/postgres/sql-style-guide.md`](docs/postgres/sql-style-guide.md)
-  - Security and Grants: [`docs/postgres/security.md`](docs/postgres/security.md)
-  - Queues and Worker: [`docs/postgres/queues-and-worker.md`](docs/postgres/queues-and-worker.md)
-  - Communications (email and SMS): [`docs/postgres/comms.md`](docs/postgres/comms.md)
-  - OTP Login: [`docs/postgres/otp-login.md`](docs/postgres/otp-login.md)
-  - Migrations and Secrets: [`docs/postgres/migrations-and-secrets.md`](docs/postgres/migrations-and-secrets.md)
+  - [SQL Style Guide](docs/postgres/sql-style-guide.md)
+  - [Security and Grants](docs/postgres/security.md)
+  - [Queues and Worker](docs/postgres/queues-and-worker.md)
+  - [Communications (email and SMS)](docs/postgres/comms.md)
+  - [OTP Login](docs/postgres/otp-login.md)
+  - [Migrations and Secrets](docs/postgres/migrations-and-secrets.md)
 
-- Gateway
+- [Gateway](docs/gateway/README.md)
 
-  - Overview: [`docs/gateway/README.md`](docs/gateway/README.md)
-  - Auth Refresh: [`docs/gateway/auth-refresh.md`](docs/gateway/auth-refresh.md)
-  - File URL Injection: [`docs/gateway/files-injection.md`](docs/gateway/files-injection.md)
+  - [Auth Refresh](docs/gateway/auth-refresh.md)
+  - [File URL Injection](docs/gateway/files-injection.md)
 
-- Worker
+- [Worker](docs/worker/README.md)
 
-  - Overview: [`docs/worker/README.md`](docs/worker/README.md)
-  - Lifecycle: [`docs/worker/lifecycle.md`](docs/worker/lifecycle.md)
-  - Payloads: [`docs/worker/payloads.md`](docs/worker/payloads.md)
-  - Email: [`docs/worker/email.md`](docs/worker/email.md)
-  - SMS: [`docs/worker/sms.md`](docs/worker/sms.md)
+  - [Lifecycle](docs/worker/lifecycle.md)
+  - [Payloads](docs/worker/payloads.md)
+  - [Email](docs/worker/email.md)
+  - [SMS](docs/worker/sms.md)
 
-- Files
+- [Files](docs/files/README.md)
 
-  - Overview: [`docs/files/README.md`](docs/files/README.md)
+- [Caddy](docs/caddy/README.md)
 
-- Caddy
+- [Shared](docs/shared/README.md)
 
-  - Overview: [`docs/caddy/README.md`](docs/caddy/README.md)
+  - [Logger](docs/shared/logger.md)
+  - [HTTP Middleware](docs/shared/middleware.md)
 
-- Shared
+- [Observability](docs/observability/README.md)
 
-  - Overview: [`docs/shared/README.md`](docs/shared/README.md)
-  - Logger: [`docs/shared/logger.md`](docs/shared/logger.md)
-  - HTTP Middleware: [`docs/shared/middleware.md`](docs/shared/middleware.md)
-
-- Observability
-
-  - Overview: [`docs/observability/README.md`](docs/observability/README.md)
-
-- Deploy
-  - Overview: [`docs/deploy/README.md`](docs/deploy/README.md)
-  - Runtime Topology: [`docs/deploy/runtime-topology.md`](docs/deploy/runtime-topology.md)
-  - Backups and Restore: [`docs/deploy/backups-restore.md`](docs/deploy/backups-restore.md)
+- [Deploy](docs/deploy/README.md)
+  - [Runtime Topology](docs/deploy/runtime-topology.md)
+  - [Backups and Restore](docs/deploy/backups-restore.md)
