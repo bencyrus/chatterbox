@@ -41,4 +41,6 @@ Navigation
   - [Comms](comms.md)
   - [OTP Login](otp-login.md)
   - [Migrations and Secrets](migrations-and-secrets.md)
-- Back to parent: [Docs Index](../README.md)
+- Security/grants:
+  - See: [Security and Grants](security.md)
+- Back to Postgres: [Postgres Index](../README.md)

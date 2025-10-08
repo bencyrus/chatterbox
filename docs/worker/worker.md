@@ -269,3 +269,7 @@ This is a concrete, step-by-step story of a single email being sent with Resend 
 - Worker takes the supervisor task.
 - Supervisor reads facts for X: success fact exists.
 - Supervisor terminates; no further tasks are enqueued.
+
+## Navigate
+
+- Back to Postgres: [Postgres Index](../README.md)

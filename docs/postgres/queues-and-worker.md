@@ -97,6 +97,8 @@ Security and grants
 - Business functions (supervisors/handlers): `security definer` with targeted `execute` grants to `worker_service_user`.
 - Function runner: `security invoker`; no direct table grants to the worker.
 
+See comprehensive guidance in [Security and Grants](security.md) for revoke/grant patterns and role boundaries. This section focuses on the worker-specific permissions above.
+
 Operational notes
 
 - Dequeue and processing are separate transactions to avoid infinite retry loops on failure.
