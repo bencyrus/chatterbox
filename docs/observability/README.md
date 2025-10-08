@@ -1,10 +1,15 @@
 ## Observability and Logging
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/README.md`](../README.md)
+
+### Why this exists
 
 - Provide consistent, structured logs across services with request correlation, and ship logs to Datadog using container labels.
 
-Conventions
+### Role in the system
 
 - Structured JSON logs via `shared/logger` across Go services (`gateway`, `files`, `worker`). Fields include:
   - `timestamp`, `level`, `service`, optional `request_id`, `message`, optional `error`, and context fields.
@@ -12,12 +17,21 @@ Conventions
   - `caddy` generates `X-Request-ID` per request.
   - `shared/middleware.RequestIDMiddleware` propagates it into the request context and logs it on request start/end and subsequent logs in handlers.
 
-Datadog log collection
+### How it works
 
-- `docker-compose.yaml` sets `com.datadoghq.ad.logs` labels on services (e.g., `gateway`, `postgrest`, `postgres`, `caddy`, `files`, `worker`). The Datadog agent container mounts Docker socket and reads these labels to tail stdout.
-- Each service writes JSON logs to stdout; Datadog ingests them under the configured `service` name.
+-- `docker-compose.yaml` sets `com.datadoghq.ad.logs` labels on services (e.g., `gateway`, `postgrest`, `postgres`, `caddy`, `files`, `worker`). The Datadog agent container mounts Docker socket and reads these labels to tail stdout.
+-- Each service writes JSON logs to stdout; Datadog ingests them under the configured `service` name.
 
-Service specifics
+Source: [`docker-compose.yaml`](../../docker-compose.yaml)
+
+```yaml
+services:
+  gateway:
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "gateway", "service": "gateway"}]'
+```
+
+### Examples
 
 - Gateway
 
@@ -33,12 +47,12 @@ Service specifics
   - Initializes logger as `worker`; logs lifecycle, dequeues, and per-task processing.
   - Appends operational errors to `queues.error` via SQL for durable audit, in addition to logs.
 
-Operational notes
+### Operations
 
 - Logs are the primary runtime signal; durable business/operational events are captured in Postgres (facts tables and `queues.error`).
 - Correlation via `X-Request-ID` ties edge, gateway, and services together; background tasks have their own task‐centric logs with task ids.
 
-Navigate
+### See also
 
 - Docs index: [`../README.md`](../README.md)
 - Shared components: [`../shared/README.md`](../shared/README.md)
