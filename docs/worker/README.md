@@ -29,6 +29,7 @@ Last verified: 2025-10-08
 - Env (required): `DATABASE_URL`.
 - Env (optional): `RESEND_API_KEY`, `WORKER_POLL_INTERVAL_SECONDS` (default `5`), `WORKER_MAX_IDLE_TIME_SECONDS` (default `30`), `WORKER_CONCURRENCY` (default `2`), `LOG_LEVEL` (default `info`).
 - Entrypoint: [`worker/cmd/worker/main.go`](../../worker/cmd/worker/main.go)
+- Database grants: [`postgres/migrations/1756074000_base_queues_and_worker.sql`](../../postgres/migrations/1756074000_base_queues_and_worker.sql)
 
 ### Examples
 

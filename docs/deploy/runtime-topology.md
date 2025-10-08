@@ -1,28 +1,33 @@
 ## Runtime Topology (Docker Compose)
 
-Purpose
+Status: current
+Last verified: 2025-10-08
+
+← Back to [`docs/deploy/README.md`](./README.md)
+
+### Why this exists
 
 - Describe how services run together locally and in simple deployments: boundaries, ports, networks, and observability.
 
-Services
+### Services
 
 - `caddy`: public entrypoint, exposes `80`/`443`, proxies all traffic to `gateway` on the internal network; adds/forwards `X-Request-ID`.
 - `gateway`: reverse proxy to PostgREST; processes token refresh and file URL injection; internal only.
 - `postgres`: database; exposes `5432` to host for dev; persists data volume; healthcheck using `pg_isready`.
-- `postgrest`: HTTP API over Postgres; internal only; depends on healthy `postgres`.
+- `postgrest`: HTTP API over Postgres; exposes `3000` on host in this compose for development; depends on healthy `postgres`.
 - `files`: file URL helper service; exposes `9090` on host for dev.
 - `worker`: background processor for `queues.task`; internal only; depends on `postgrest` start and healthy `postgres`.
 - `datadog`: agent for log collection; tails container stdout based on labels.
 
-Network
+### Network
 
 - Single bridge network `chattterbox-network` shared by all services (note the current triple‑t name in compose).
 
-Observability
+### Observability
 
 - Each service declares `com.datadoghq.ad.logs` labels with `source`/`service`; agent mounts Docker socket and tails stdout JSON logs.
 
-Secrets and environment
+### Secrets and environment
 
 - Service env files live under `secrets/`:
   - `.env.gateway`, `.env.worker`, `.env.files`, `.env.postgrest`, `.env.postgres`, `.env.datadog`.
@@ -31,11 +36,11 @@ Secrets and environment
   - Example: `{secrets.secret_jwt_secret}` → `JWT_SECRET`.
 - Ensure JWT secret and PostgREST role config match values seeded by migrations.
 
-Volumes
+### Volumes
 
 - `postgres_data` for DB state; `caddy_data`/`caddy_config` for Caddy state; `postgres/backups` mounted into container `/backups`.
 
-Navigate
+### See also
 
 - Deploy: [`./README.md`](./README.md)
 - Observability: [`../observability/README.md`](../observability/README.md)

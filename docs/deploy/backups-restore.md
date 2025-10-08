@@ -1,10 +1,15 @@
 ## Backups and Restore
 
-Purpose
+Status: current
+Last verified: 2025-10-08
 
-- How to create and restore full‑cluster Postgres logical backups using the provided scripts.
+← Back to [`docs/deploy/README.md`](./README.md)
 
-Scripts
+### Why this exists
+
+- Provide simple, reliable scripts for full‑cluster logical backups and restores during development and basic deployments.
+
+### How it works
 
 - Container utility: [`postgres/scripts/pg-backup.sh`](../../postgres/scripts/pg-backup.sh)
   - Runs `pg_dumpall -U "$POSTGRES_USER" | gzip -9` and writes `/backups/cluster_YYYYMMDDTHHMMSSZ.sql.gz` inside the container.
@@ -13,24 +18,23 @@ Scripts
 - Host restore wrapper: [`postgres/run-db-restore.sh`](../../postgres/run-db-restore.sh)
   - Streams a selected `cluster_*.sql.gz` file into `psql` inside the running Postgres container.
 
-Create a backup
+### Operations
 
-```bash
-./postgres/run-db-backup.sh
-```
+- Create a backup
+  ```bash
+  ./postgres/run-db-backup.sh
+  ```
+- Restore from a backup
+  ```bash
+  ./postgres/run-db-restore.sh cluster_YYYYMMDDTHHMMSSZ.sql.gz
+  ```
 
-Restore from a backup
-
-```bash
-./postgres/run-db-restore.sh cluster_YYYYMMDDTHHMMSSZ.sql.gz
-```
-
-Notes
+### Notes
 
 - Backups are logical SQL dumps (roles + all databases); files are stored under `postgres/backups/` on the host (mounted to `/backups` in the container).
 - Restores apply SQL into the running Postgres; they do not wipe volumes.
 
-Navigate
+### See also
 
 - Deploy overview: [`./README.md`](./README.md)
 - Runtime topology: [`./runtime-topology.md`](./runtime-topology.md)
