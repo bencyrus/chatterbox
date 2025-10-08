@@ -1,42 +1,53 @@
-# Chatterbox
+# Chatterbox Documentation Map
 
-Internal overview. Business logic is in PostgreSQL; other services handle routing, token refresh, and file URL injection.
+- Concepts
 
-Architecture
+  - [`docs/concepts/README.md`](docs/concepts/README.md)
+  - Why Supervisors: [`docs/concepts/why-supervisor.md`](docs/concepts/why-supervisor.md)
 
-- Caddy → Gateway → PostgREST → PostgreSQL
-- Gateway → Files (only when a response includes a top-level `files` array)
+- Postgres
 
-Components
+  - Overview: [`docs/postgres/README.md`](docs/postgres/README.md)
+  - SQL Style Guide: [`docs/postgres/sql-style-guide.md`](docs/postgres/sql-style-guide.md)
+  - Security and Grants: [`docs/postgres/security.md`](docs/postgres/security.md)
+  - Queues and Worker: [`docs/postgres/queues-and-worker.md`](docs/postgres/queues-and-worker.md)
+  - Communications (email and SMS): [`docs/postgres/comms.md`](docs/postgres/comms.md)
+  - OTP Login: [`docs/postgres/otp-login.md`](docs/postgres/otp-login.md)
+  - Migrations and Secrets: [`docs/postgres/migrations-and-secrets.md`](docs/postgres/migrations-and-secrets.md)
 
-- caddy: public entrypoint, sets `X-Request-ID`, proxies to gateway. See [`caddy/Caddyfile`](caddy/Caddyfile).
-- gateway: reverse proxy to PostgREST; best‑effort token refresh; injects processed file URLs. See [`gateway/internal`](gateway/internal).
-- postgrest: HTTP API over PostgreSQL. Env in [`secrets/.env.postgrest`](secrets/.env.postgrest).
-- files: resolves file IDs to URLs (placeholder). See [`files/cmd/files`](files/cmd/files) and [`files/internal/config`](files/internal/config).
-- shared: common `logger` and `middleware`. See [`shared/logger`](shared/logger) and [`shared/middleware`](shared/middleware).
-- datadog: log collection via compose labels.
+- Gateway
 
-Request flow
+  - Overview: [`docs/gateway/README.md`](docs/gateway/README.md)
+  - Auth Refresh: [`docs/gateway/auth-refresh.md`](docs/gateway/auth-refresh.md)
+  - File URL Injection: [`docs/gateway/files-injection.md`](docs/gateway/files-injection.md)
 
-- Caddy assigns `X-Request-ID` and forwards.
-- Gateway may refresh tokens (2s budget) then proxies to PostgREST.
-- PostgREST executes DB logic/auth.
-- Gateway injects `processed_files` when applicable.
-- Response returns; new tokens (if any) are added to headers.
+- Worker
 
-Orchestration
+  - Overview: [`docs/worker/README.md`](docs/worker/README.md)
+  - Lifecycle: [`docs/worker/lifecycle.md`](docs/worker/lifecycle.md)
+  - Payloads: [`docs/worker/payloads.md`](docs/worker/payloads.md)
+  - Email: [`docs/worker/email.md`](docs/worker/email.md)
+  - SMS: [`docs/worker/sms.md`](docs/worker/sms.md)
 
-- [`docker-compose.yaml`](docker-compose.yaml) defines services and one bridge network. Only Caddy exposes 80/443.
+- Files
 
-Setup (dev)
+  - Overview: [`docs/files/README.md`](docs/files/README.md)
 
-- Create env files in [`secrets/`](secrets/) as per service READMEs.
-- Start: `docker-compose up --build`.
+- Caddy
 
-References
+  - Overview: [`docs/caddy/README.md`](docs/caddy/README.md)
 
-- [`gateway/README.md`](gateway/README.md) — gateway responsibilities and env
-- [`files/README.md`](files/README.md) — files service endpoints and behavior
-- [`postgres/README.md`](postgres/README.md) — schema, roles, RPCs
-- [`shared/README.md`](shared/README.md) — logging and middleware
-- [`caddy/README.md`](caddy/README.md) — edge routing and headers
+- Shared
+
+  - Overview: [`docs/shared/README.md`](docs/shared/README.md)
+  - Logger: [`docs/shared/logger.md`](docs/shared/logger.md)
+  - HTTP Middleware: [`docs/shared/middleware.md`](docs/shared/middleware.md)
+
+- Observability
+
+  - Overview: [`docs/observability/README.md`](docs/observability/README.md)
+
+- Deploy
+  - Overview: [`docs/deploy/README.md`](docs/deploy/README.md)
+  - Runtime Topology: [`docs/deploy/runtime-topology.md`](docs/deploy/runtime-topology.md)
+  - Backups and Restore: [`docs/deploy/backups-restore.md`](docs/deploy/backups-restore.md)

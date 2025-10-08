@@ -21,46 +21,57 @@ Last verified: 2025-10-08
 
 ### Documentation map
 
-- Concepts: [Core architectural ideas](concepts/README.md)
+- Concepts
 
-  - Why the Supervisor Pattern: [Supervisors rationale](concepts/why-supervisor.md)
+  - Overview: [concepts/README.md](concepts/README.md)
+  - Why the Supervisor Pattern: [concepts/why-supervisor.md](concepts/why-supervisor.md)
 
-- Postgres Architecture: [Database-first design](postgres/README.md)
+- Postgres
 
-  - SQL Style Guide: [Conventions for migrations/functions](postgres/sql-style-guide.md)
-  - Security and Grants: [Roles and privileges](postgres/security.md)
-  - Queues and Worker: [DB queue and worker contract](postgres/queues-and-worker.md)
-  - Communications (email and SMS): [Data model, supervisors, handlers](postgres/comms.md)
-  - OTP Login (passwordless): [Flow and helpers](postgres/otp-login.md)
-  - Migrations and Secrets: [Applying migrations and env mapping](postgres/migrations-and-secrets.md)
+  - Overview: [postgres/README.md](postgres/README.md)
+  - SQL Style Guide: [postgres/sql-style-guide.md](postgres/sql-style-guide.md)
+  - Security and Grants: [postgres/security.md](postgres/security.md)
+  - Queues and Worker: [postgres/queues-and-worker.md](postgres/queues-and-worker.md)
+  - Communications (email and SMS): [postgres/comms.md](postgres/comms.md)
+  - OTP Login (passwordless): [postgres/otp-login.md](postgres/otp-login.md)
+  - Migrations and Secrets: [postgres/migrations-and-secrets.md](postgres/migrations-and-secrets.md)
 
-- Gateway: [Reverse proxy and edge logic](gateway/README.md)
+- Gateway
 
-  - Gateway Auth Refresh: [Opportunistic token refresh](gateway/auth-refresh.md)
-  - Gateway File URL Injection: [Response enrichment for files](gateway/files-injection.md)
+  - Overview: [gateway/README.md](gateway/README.md)
+  - Auth Refresh: [gateway/auth-refresh.md](gateway/auth-refresh.md)
+  - File URL Injection: [gateway/files-injection.md](gateway/files-injection.md)
 
-- Worker: [Background task processor](worker/README.md)
+- Worker
 
-  - Worker Lifecycle: [Dequeue, dispatch, process](worker/lifecycle.md)
-  - Worker Task Payloads and Handlers: [Shapes and envelope](worker/payloads.md)
-  - Worker Email Processor: [Resend integration](worker/email.md)
-  - Worker SMS Processor: [Simulated provider](worker/sms.md)
+  - Overview: [worker/README.md](worker/README.md)
+  - Lifecycle: [worker/lifecycle.md](worker/lifecycle.md)
+  - Payloads: [worker/payloads.md](worker/payloads.md)
+  - Email: [worker/email.md](worker/email.md)
+  - SMS: [worker/sms.md](worker/sms.md)
 
-- Files Service: [Signed URL helper](files/README.md)
+- Files
 
-- Caddy (Reverse Proxy): [Public entrypoint and correlation](caddy/README.md)
+  - Overview: [files/README.md](files/README.md)
 
-- Shared Components: [Common libraries](shared/README.md)
+- Caddy
 
-  - Shared Logger: [JSON logging API](shared/logger.md)
-  - Shared HTTP Middleware: [Request ID and access logs](shared/middleware.md)
+  - Overview: [caddy/README.md](caddy/README.md)
 
-- Observability and Logging: [Datadog and correlation](observability/README.md)
+- Shared
 
-- Deploy and Operations: [Overview](deploy/README.md)
+  - Overview: [shared/README.md](shared/README.md)
+  - Logger: [shared/logger.md](shared/logger.md)
+  - HTTP Middleware: [shared/middleware.md](shared/middleware.md)
 
-  - Runtime Topology (Docker Compose): [Services, ports, network](deploy/runtime-topology.md)
-  - Backups and Restore: [Scripts and procedures](deploy/backups-restore.md)
+- Observability
+
+  - Overview: [observability/README.md](observability/README.md)
+
+- Deploy
+  - Overview: [deploy/README.md](deploy/README.md)
+  - Runtime Topology: [deploy/runtime-topology.md](deploy/runtime-topology.md)
+  - Backups and Restore: [deploy/backups-restore.md](deploy/backups-restore.md)
 
 ### Start here
 

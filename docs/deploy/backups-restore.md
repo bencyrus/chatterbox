@@ -21,10 +21,13 @@ Last verified: 2025-10-08
 ### Operations
 
 - Create a backup
+
   ```bash
   ./postgres/run-db-backup.sh
   ```
+
 - Restore from a backup
+
   ```bash
   ./postgres/run-db-restore.sh cluster_YYYYMMDDTHHMMSSZ.sql.gz
   ```

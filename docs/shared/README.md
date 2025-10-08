@@ -21,15 +21,18 @@ Last verified: 2025-10-08
   - Source: [`shared/logger/logger.go`](../../shared/logger/logger.go)
   - Initialize once per process, then use typed helpers to emit JSON logs.
   - Minimal example
+
     ```go
     logger.Init("gateway")
     logger.Info(ctx, "starting", logger.Fields{"port": 8080})
     ```
 
 - HTTP Middleware
+
   - Source: [`shared/middleware/logging.go`](../../shared/middleware/logging.go)
   - Wraps a handler, extracts `X-Request-ID`, logs request/response with duration.
   - Minimal example
+
     ```go
     handler := middleware.RequestIDMiddleware(mux)
     ```

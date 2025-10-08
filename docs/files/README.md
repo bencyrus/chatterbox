@@ -54,10 +54,13 @@ Last verified: 2025-10-08
 ### Examples
 
 - Request
+
   ```json
   { "files": ["abc123", 42] }
   ```
+
 - Response (placeholder URLs)
+
   ```json
   [
     {

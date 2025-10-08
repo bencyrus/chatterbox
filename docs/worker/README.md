@@ -16,7 +16,7 @@ Last verified: 2025-10-08
 - Invokes database handlers (`before_handler`, `success_handler`, `error_handler`) via `internal.run_function` and calls providers.
 - Appends operational errors to `queues.error`; never enqueues tasks.
 - Runs with minimal database privileges: usage on `queues`/`internal`, execute on `queues.dequeue_next_available_task`, `internal.run_function(text,jsonb)`, and per‑function grants to business functions.
-  - Source: [`postgres/migrations/1756074000_base_queues_and_worker.sql`](../..//postgres/migrations/1756074000_base_queues_and_worker.sql)
+  - Source: [`postgres/migrations/1756074000_base_queues_and_worker.sql`](../../postgres/migrations/1756074000_base_queues_and_worker.sql)
 
 ### How it works
 

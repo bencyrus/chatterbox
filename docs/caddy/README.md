@@ -23,7 +23,7 @@ Last verified: 2025-10-08
   Source: [`caddy/Caddyfile`](../../caddy/Caddyfile)
 
   ```
-  api.glovee.io {
+  example.com {
       header X-Request-ID {http.request.uuid}
       reverse_proxy gateway:8080 {
           header_up X-Request-ID {http.request.uuid}

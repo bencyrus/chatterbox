@@ -17,18 +17,23 @@ Last verified: 2025-10-08
 
 - Source: [`shared/logger/logger.go`](../../shared/logger/logger.go)
 - Initialize once per process
-  ```go
-  logger.Init("gateway")
-  ```
+
+```go
+logger.Init("gateway")
+```
+
 - Emit logs
-  ```go
-  logger.Info(ctx, "starting", logger.Fields{"port": 8080})
-  logger.Error(ctx, "failed", err)
-  ```
+
+```go
+logger.Info(ctx, "starting", logger.Fields{"port": 8080})
+logger.Error(ctx, "failed", err)
+```
+
 - Attach request id
-  ```go
-  ctx = logger.WithRequestID(ctx, requestID)
-  ```
+
+```go
+ctx = logger.WithRequestID(ctx, requestID)
+```
 
 ### Fields
 

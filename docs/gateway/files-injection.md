@@ -18,12 +18,15 @@ Last verified: 2025-10-08
 ### Key code paths
 
 - Body processing: [`gateway/internal/files/helpers.go`](../../gateway/internal/files/helpers.go)
+
   ```go
   fileops.ProcessFileURLsIfNeeded(ctx, cfg, resp)
   ```
+
 - Injection logic: [`gateway/internal/files/processor.go`](../../gateway/internal/files/processor.go)
+
   ```go
-  var generic map[String]any
+  var generic map[string]any
   if err := json.Unmarshal(body, &generic); err != nil { return body, nil }
   filesRaw, ok := generic[cfg.FilesFieldName]
   if !ok { return body, nil }
@@ -31,7 +34,9 @@ Last verified: 2025-10-08
   if !ok || len(filesSlice) == 0 { return body, nil }
   // POST { files: [...] } to file service and inject cfg.ProcessedFilesFieldName
   ```
+
 - Proxy integration: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+
   ```go
   ModifyResponse: func(resp *http.Response) error {
       fileops.ProcessFileURLsIfNeeded(ctx, g.cfg, resp)

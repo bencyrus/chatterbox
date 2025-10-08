@@ -18,22 +18,29 @@ Last verified: 2025-10-08
 ### Key code paths
 
 - Token parsing & decision: [`gateway/internal/auth/helpers.go`](../../gateway/internal/auth/helpers.go)
+
   ```go
   remaining, ok := AccessTokenSecondsRemaining(cfg, headers, now)
   if ok && remaining <= cfg.RefreshThresholdSeconds { /* refresh */ }
   ```
+
 - Proxy preflight refresh: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+
   ```go
   var refreshed *auth.RefreshResult
   if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
       refreshed = auth.PreflightRefresh(ctx, g.cfg, r.Header, 2*time.Second)
   }
   ```
+
 - Refresh RPC: [`gateway/internal/auth/refresher.go`](../../gateway/internal/auth/refresher.go)
+
   ```go
   // POST to POSTGREST_URL + REFRESH_TOKENS_PATH expecting { access_token, refresh_token }
   ```
+
 - Proxy integration: [`gateway/internal/proxy/proxy.go`](../../gateway/internal/proxy/proxy.go)
+
   ```go
   auth.AttachRefreshedTokens(resp.Header, g.cfg, refreshed)
   ```

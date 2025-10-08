@@ -24,7 +24,7 @@ Last verified: 2025-10-08
   - Proxies requests to PostgREST.
   - Optionally refreshes tokens preflight based on expiry.
   - Optionally enriches JSON responses with signed file URLs.
-  - For detailed flows, see the child pages below.
+- For detailed flows, see the child pages below.
 
 ### Operations
 
