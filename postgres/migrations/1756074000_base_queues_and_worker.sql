@@ -2,7 +2,7 @@
 create schema queues;
 
 -- worker service user with minimal grants
-create user worker_service_user with login password 'worker_service_user';
+create user worker_service_user with login password '{secrets.worker_service_user_password}';
 grant usage on schema queues to worker_service_user;
 grant usage on schema internal to worker_service_user;
 

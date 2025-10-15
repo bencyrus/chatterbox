@@ -10,47 +10,27 @@ REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
 DEFAULT_MIGRATIONS_DIR="${REPO_ROOT}/postgres/migrations"
 DEFAULT_SECRETS_FILE="${REPO_ROOT}/secrets/.env.postgres"
 PSQL_BIN="psql"
-DB_URL="${DATABASE_URL:-}"
+DB_URL=""
 MIGRATIONS_DIR="${DEFAULT_MIGRATIONS_DIR}"
 SECRETS_FILE="${DEFAULT_SECRETS_FILE}"
-DRY_RUN=0
 VERBOSE=0
 SINGLE_TX=1
 
 usage() {
   cat <<EOF
-Usage: $0 [--db-url URL] [--migrations DIR] [--secrets FILE] [--psql PATH] [--dry-run] [--single-transaction|--per-file] [--verbose]
+Usage: $0 [--verbose|-v] [--per-file]
 
 Options:
-  --db-url URL      Postgres database URL (or set DATABASE_URL)
-  --migrations DIR  Directory containing migration .sql files (default: ${DEFAULT_MIGRATIONS_DIR})
-  --secrets FILE    Path to secrets .env.postgres (default: ${DEFAULT_SECRETS_FILE})
-  --psql PATH       Path to psql binary (default: psql)
-  --dry-run         Validate and list migrations without applying
-  --single-transaction
-                    Run all migrations in one transaction (default)
-  --per-file        Run each migration file in its own transaction
-  --verbose         Verbose logging
+  --verbose, -v     Verbose logging
+  --per-file        Run each migration file in its own transaction (default is single transaction)
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --db-url)
-      DB_URL="$2"; shift 2;;
-    --migrations)
-      MIGRATIONS_DIR="$2"; shift 2;;
-    --secrets)
-      SECRETS_FILE="$2"; shift 2;;
-    --psql)
-      PSQL_BIN="$2"; shift 2;;
-    --dry-run)
-      DRY_RUN=1; shift;;
-    --single-transaction)
-      SINGLE_TX=1; shift;;
     --per-file)
       SINGLE_TX=0; shift;;
-    --verbose)
+    --verbose|-v)
       VERBOSE=1; shift;;
     -h|--help)
       usage; exit 0;;
@@ -58,11 +38,6 @@ while [[ $# -gt 0 ]]; do
       echo "Unknown argument: $1" >&2; usage; exit 2;;
   esac
 done
-
-if [[ -z "${DB_URL}" ]]; then
-  echo "Error: --db-url not provided and DATABASE_URL not set" >&2
-  exit 2
-fi
 
 if [[ ! -d "${MIGRATIONS_DIR}" ]]; then
   echo "Error: migrations directory not found: ${MIGRATIONS_DIR}" >&2
@@ -75,11 +50,24 @@ if [[ ! -f "${SECRETS_FILE}" ]]; then
 fi
 
 [[ ${VERBOSE} -eq 1 ]] && echo "Loading secrets from ${SECRETS_FILE}"
-
-# Load secrets into environment
 set -a
 source "${SECRETS_FILE}"
 set +a
+
+# Always build DATABASE_URL from POSTGRES_* values
+POSTGRES_SSL_MODE="${POSTGRES_SSL_MODE:-disable}"
+missing=()
+for v in POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD; do
+  if [[ -z "${!v:-}" ]]; then
+    missing+=("$v")
+  fi
+done
+if [[ ${#missing[@]} -gt 0 ]]; then
+  echo "Error: missing required env vars: ${missing[*]}" >&2
+  exit 2
+fi
+DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${POSTGRES_SSL_MODE}"
+[[ ${VERBOSE} -eq 1 ]] && echo "Constructed DATABASE_URL from POSTGRES_* env vars."
 
 # List and sort .sql files (portable across macOS Bash 3.2)
 MIG_LIST_FILE=$(mktemp "${TMPDIR:-/tmp}/migr_list.XXXXXX")
@@ -126,12 +114,6 @@ substitute_and_apply() {
     exit 1
   fi
 
-  if [[ ${DRY_RUN} -eq 1 ]]; then
-    [[ ${VERBOSE} -eq 1 ]] && echo "Validated ${label}"
-    rm -f "${tmpfile}"
-    return 0
-  fi
-
   local -a cmd
   cmd=("${PSQL_BIN}" --dbname "${DB_URL}" -v ON_ERROR_STOP=1 -f "${tmpfile}")
   [[ ${VERBOSE} -eq 1 ]] && printf 'Executing: %q ' "${cmd[@]}" && echo
@@ -169,12 +151,6 @@ if [[ ${SINGLE_TX} -eq 1 ]]; then
   done < "${MIG_LIST_FILE}"
 
   echo "commit;" >> "${COMBINED_SQL}"
-
-  if [[ ${DRY_RUN} -eq 1 ]]; then
-    [[ ${VERBOSE} -eq 1 ]] && echo "Validated combined migration plan"
-    rm -f "${COMBINED_SQL}" "${MIG_LIST_FILE}"
-    exit 0
-  fi
 
   cmd=("${PSQL_BIN}" --dbname "${DB_URL}" -v ON_ERROR_STOP=1 -f "${COMBINED_SQL}")
   [[ ${VERBOSE} -eq 1 ]] && printf 'Executing: %q ' "${cmd[@]}" && echo
