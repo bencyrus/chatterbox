@@ -40,6 +40,7 @@ Last verified: 2025-10-08
 - See detailed examples in:
   - Auth refresh: [`./auth-refresh.md`](./auth-refresh.md)
   - File URL injection: [`./files-injection.md`](./files-injection.md)
+  - OpenAPI: [`./openapi.md`](./openapi.md)
 
 ### Future
 

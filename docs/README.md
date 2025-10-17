@@ -38,6 +38,7 @@ Last verified: 2025-10-08
 
   - [Auth Refresh](gateway/auth-refresh.md)
   - [File URL Injection](gateway/files-injection.md)
+  - [OpenAPI](gateway/openapi.md)
 
 - [Worker](worker/README.md)
 

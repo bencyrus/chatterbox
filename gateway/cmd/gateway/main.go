@@ -6,9 +6,8 @@ import (
 	"net/http"
 
 	"github.com/bencyrus/chatterbox/gateway/internal/config"
-	"github.com/bencyrus/chatterbox/gateway/internal/proxy"
+	"github.com/bencyrus/chatterbox/gateway/internal/httpserver"
 	"github.com/bencyrus/chatterbox/shared/logger"
-	"github.com/bencyrus/chatterbox/shared/middleware"
 )
 
 func main() {
@@ -20,14 +19,11 @@ func main() {
 
 	logger.Info(ctx, "starting gateway", logger.Fields{"port": cfg.Port})
 
-	gw, err := proxy.NewGateway(cfg)
+	handler, err := httpserver.NewHandler(cfg)
 	if err != nil {
-		logger.Error(ctx, "failed to init gateway", err)
-		log.Fatalf("failed to init gateway: %v", err)
+		logger.Error(ctx, "failed to init http server", err)
+		log.Fatalf("failed to init http server: %v", err)
 	}
-
-	// Wrap the gateway with request ID middleware
-	handler := middleware.RequestIDMiddleware(gw)
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
