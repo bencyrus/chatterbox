@@ -2,7 +2,14 @@ api.glovee.io {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
-    # Forward the same UUID to the upstream service as a request header
+    # Swagger UI at /docs (strips the prefix so SwaggerUI serves from /)
+    handle_path /docs* {
+        reverse_proxy swaggerui:8080 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Forward all other requests to gateway (PostgREST reverse proxy)
     reverse_proxy gateway:8080 {
         header_up X-Request-ID {http.request.uuid}
     }

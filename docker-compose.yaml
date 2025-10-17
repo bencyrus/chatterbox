@@ -70,6 +70,7 @@ services:
     depends_on:
       - gateway
       - files
+      - swaggerui
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
@@ -122,6 +123,19 @@ services:
         condition: service_healthy
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
+
+  swaggerui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: swaggerui
+    restart: unless-stopped
+    environment:
+      SWAGGER_JSON_URL: http://gateway:8080/openapi.json
+    networks:
+      - chattterbox-network
+    depends_on:
+      - gateway
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "swaggerui", "service": "swaggerui"}]'
 
 volumes:
   caddy_data:
