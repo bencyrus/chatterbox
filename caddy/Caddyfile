@@ -2,7 +2,12 @@ api.glovee.io {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
-    # Swagger UI at /docs (strips the prefix so SwaggerUI serves from /)
+    # Redirect /docs -> /docs/ so relative asset URLs resolve under /docs/*
+    handle /docs {
+        redir /docs/ 308
+    }
+
+    # Swagger UI mounted under /docs using a single handler; strips the /docs prefix
     handle_path /docs* {
         reverse_proxy swaggerui:8080 {
             header_up X-Request-ID {http.request.uuid}

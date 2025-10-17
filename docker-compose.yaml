@@ -129,7 +129,7 @@ services:
     container_name: swaggerui
     restart: unless-stopped
     environment:
-      SWAGGER_JSON_URL: http://gateway:8080/openapi.json
+      URL: /openapi.json
     networks:
       - chattterbox-network
     depends_on:
