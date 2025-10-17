@@ -367,7 +367,6 @@ $$;
 
 create or replace function api.refresh_tokens(refresh_token text)
 returns jsonb
-stable
 language plpgsql
 security definer
 as $$
