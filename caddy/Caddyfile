@@ -2,20 +2,30 @@ api.glovee.io {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
-    # Redirect /docs -> /docs/ so relative asset URLs resolve under /docs/*
-    handle /docs {
-        redir /docs/ 308
+    # Forward all API requests to gateway
+    reverse_proxy gateway:8080 {
+        header_up X-Request-ID {http.request.uuid}
     }
 
-    # Swagger UI mounted under /docs using a single handler; strips the /docs prefix
-    handle_path /docs* {
-        reverse_proxy swaggerui:8080 {
+    log {
+        output stdout
+        format json
+    }
+}
+
+docs.glovee.io {
+    # Add a unique UUID per request to the response headers
+    header X-Request-ID {http.request.uuid}
+
+    # Serve the OpenAPI spec at /openapi.json via the gateway
+    handle /openapi.json {
+        reverse_proxy gateway:8080 {
             header_up X-Request-ID {http.request.uuid}
         }
     }
 
-    # Forward all other requests to gateway (PostgREST reverse proxy)
-    reverse_proxy gateway:8080 {
+    # All other paths serve Swagger UI (index + static assets)
+    reverse_proxy swaggerui:8080 {
         header_up X-Request-ID {http.request.uuid}
     }
 
