@@ -1,12 +1,6 @@
 api.glovee.io {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
-    header X-Site "api.glovee.io"
-
-    # Redirect any /docs* on the API host to the docs host
-    handle_path /docs* {
-        redir https://docs.glovee.io{uri} 301
-    }
 
     # Forward all API requests to gateway
     reverse_proxy gateway:8080 {
@@ -22,7 +16,6 @@ api.glovee.io {
 docs.glovee.io {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
-    header X-Site "docs.glovee.io"
 
     # Serve the OpenAPI spec at /openapi.json via the gateway
     handle /openapi.json {
