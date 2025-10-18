@@ -18,13 +18,20 @@ SINGLE_TX=1
 
 usage() {
   cat <<EOF
-Usage: $0 [--verbose|-v] [--per-file]
+Usage: $0 [--verbose|-v] [--per-file] [--only <migration.sql>]
 
 Options:
   --verbose, -v     Verbose logging
   --per-file        Run each migration file in its own transaction (default is single transaction)
+  --only NAME       Apply only the specified migration (basename, basename without .sql, or path)
+
+Examples:
+  $0 --only 1756074400_magic_link_login
+  $0 --per-file --verbose
 EOF
 }
+
+MIG_ONLY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,6 +39,8 @@ while [[ $# -gt 0 ]]; do
       SINGLE_TX=0; shift;;
     --verbose|-v)
       VERBOSE=1; shift;;
+    --only)
+      if [[ $# -lt 2 ]]; then echo "--only requires a filename" >&2; exit 2; fi; MIG_ONLY="$2"; shift 2;;
     -h|--help)
       usage; exit 0;;
     *)
@@ -69,12 +78,35 @@ fi
 DB_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${POSTGRES_SSL_MODE}"
 [[ ${VERBOSE} -eq 1 ]] && echo "Constructed DATABASE_URL from POSTGRES_* env vars."
 
-# List and sort .sql files (portable across macOS Bash 3.2)
+# Build migration list (all or a single file)
 MIG_LIST_FILE=$(mktemp "${TMPDIR:-/tmp}/migr_list.XXXXXX")
-if ! find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.sql' -print | sort > "${MIG_LIST_FILE}"; then
-  echo "Failed to enumerate migration files" >&2
-  rm -f "${MIG_LIST_FILE}"
-  exit 2
+if [[ -n "${MIG_ONLY}" ]]; then
+  # Resolve path: allow basename under MIGRATIONS_DIR or explicit path
+  CANDIDATE="${MIG_ONLY}"
+  if [[ ! -f "${CANDIDATE}" ]]; then
+    # If NAME has no .sql, try adding it
+    if [[ "${MIG_ONLY}" != *.sql ]]; then
+      if [[ -f "${MIGRATIONS_DIR}/${MIG_ONLY}.sql" ]]; then
+        CANDIDATE="${MIGRATIONS_DIR}/${MIG_ONLY}.sql"
+      else
+        CANDIDATE="${MIGRATIONS_DIR}/${MIG_ONLY}"
+      fi
+    else
+      CANDIDATE="${MIGRATIONS_DIR}/${MIG_ONLY}"
+    fi
+  fi
+  if [[ ! -f "${CANDIDATE}" ]]; then
+    echo "Migration not found: ${MIG_ONLY}" >&2
+    rm -f "${MIG_LIST_FILE}"
+    exit 2
+  fi
+  printf '%s\n' "${CANDIDATE}" > "${MIG_LIST_FILE}"
+else
+  if ! find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.sql' -print | sort > "${MIG_LIST_FILE}"; then
+    echo "Failed to enumerate migration files" >&2
+    rm -f "${MIG_LIST_FILE}"
+    exit 2
+  fi
 fi
 
 NUM_FILES=$(wc -l < "${MIG_LIST_FILE}" | tr -d ' ')
