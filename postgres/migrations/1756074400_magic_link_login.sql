@@ -210,7 +210,7 @@ begin
     left join auth.magic_login_token_usage u on u.magic_login_token_id = t.magic_login_token_id
     where t.token_hash = _token_hash
       and u.magic_login_token_id is null
-      and t.created_at >= now() - make_interval(mins => auth.magic_token_expiry_minutes())
+      and t.created_at >= now() - make_interval(secs => auth.magic_token_expiry_seconds())
     order by t.created_at desc
     limit 1;
 
