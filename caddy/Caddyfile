@@ -34,3 +34,49 @@ docs.glovee.io {
         format json
     }
 }
+
+glovee.io {
+    # Add a unique UUID per request to the response headers
+    header X-Request-ID {http.request.uuid}
+
+    # Apple App Site Association (AASA) for universal links
+    @aasaWellKnown path /.well-known/apple-app-site-association
+    handle @aasaWellKnown {
+        header Content-Type application/json
+        respond <<EOF
+{
+  "applinks": {
+    "apps": [],
+    "details": [{
+      "appID": "{$AASA_APP_ID}",
+      "paths": ["{$AASA_PATHS}"]
+    }]
+  }
+}
+EOF
+    }
+
+    @aasaRoot path /apple-app-site-association
+    handle @aasaRoot {
+        header Content-Type application/json
+        respond <<EOF
+{
+  "applinks": {
+    "apps": [],
+    "details": [{
+      "appID": "{$AASA_APP_ID}",
+      "paths": ["{$AASA_PATHS}"]
+    }]
+  }
+}
+EOF
+    }
+
+    # Default: 204 for other requests (no content)
+    respond 204
+
+    log {
+        output stdout
+        format json
+    }
+}
