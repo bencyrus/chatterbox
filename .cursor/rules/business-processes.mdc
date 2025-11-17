@@ -12,6 +12,11 @@ alwaysApply: true
   - Supervisors enqueue child tasks (e.g., email, sms) and may re-enqueue themselves to check progress.
   - Keep processes idempotent; derive state from facts and uniqueness constraints.
 
+- Prefer fact-finding helpers over inline queries:
+
+  - Create small SQL functions to fetch specific facts (ids, statuses, counts) and reuse them across RPCs and supervisors.
+  - This improves readability, reduces duplication, and enforces consistent input normalization.
+
 - Keep the Go worker minimal:
 
   - Lease tasks and dispatch to database via a single security-definer runner (e.g., `internal.run_function(name, payload)`), not per-function grants.

@@ -27,6 +27,16 @@ alwaysApply: true
   - Use aliases only when required (self-joins, multiple references to the same table, or disambiguation across joins).
   - Prefer unqualified column names when selecting from a single table.
 
+- Join style:
+
+  - Prefer USING(column_name[, ...]) when joining tables on identically named key columns.
+  - Keep joins readable; avoid redundant table qualifiers when USING is used.
+
+- Fact getters over inline queries:
+
+  - Prefer small, single-purpose SQL functions ("fact getters") over ad-hoc inline SELECTs inside PL/pgSQL and RPC bodies.
+  - Compose behavior by calling functions; avoid duplicating query logic across callers.
+
 - Function calling and returns:
   - Prefer functions that return concrete types (scalars or named composite types) so they can be called directly and assigned without `select`.
   - Prefer direct assignment for function calls that return a single value/row: `_var := schema.function(args);` and `return schema.function(args);`.

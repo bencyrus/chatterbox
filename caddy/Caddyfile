@@ -72,6 +72,24 @@ EOF
 EOF
     }
 
+    # Android Digital Asset Links for App Links verification
+    @assetlinks path /.well-known/assetlinks.json
+    handle @assetlinks {
+        header Content-Type application/json
+        respond <<EOF
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "{$ANDROID_APP_PACKAGE}",
+      "sha256_cert_fingerprints": ["{$ANDROID_APP_SHA256_FPS}"]
+    }
+  }
+]
+EOF
+    }
+
     # Default: 204 for other requests (no content)
     respond 204
 
