@@ -742,3 +742,38 @@ end;
 $$;
 
 grant execute on function api.me() to authenticated;
+
+insert into internal.config (
+    key,
+    value
+)
+values (
+    'default_profile_language_code',
+    '"en"'
+)
+on conflict (key) do nothing;
+
+insert into internal.config (
+    key,
+    value
+)
+values (
+    'available_language_codes',
+    '["en","fr","de"]'
+)
+on conflict (key) do nothing;
+
+create or replace function api.app_config()
+returns jsonb
+language plpgsql
+security definer
+as $$
+begin
+    return jsonb_build_object(
+        'default_profile_language_code', internal.get_config('default_profile_language_code'),
+        'available_language_codes', internal.get_config('available_language_codes')
+    );
+end;
+$$;
+
+grant execute on function api.app_config() to anon, authenticated;
