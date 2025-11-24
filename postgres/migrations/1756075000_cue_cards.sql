@@ -109,6 +109,14 @@ create table if not exists learning.cue_seen (
     seen_at timestamp with time zone not null default now()
 );
 
+-- table: fact table recording when an account switches its active learning profile
+create table if not exists learning.active_profile (
+    account_active_profile_id bigserial primary key,
+    account_id bigint not null references accounts.account(account_id) on delete cascade,
+    profile_id bigint not null references learning.profile(profile_id) on delete cascade,
+    created_at timestamp with time zone not null default now()
+);
+
 create or replace function learning.get_or_create_account_profile(
     _account_id bigint,
     _language_code languages.language_code,
@@ -416,6 +424,61 @@ as $$
     where profile_id = _profile_id
 $$;
 
+create or replace function learning.set_active_profile(
+    _account_id bigint,
+    _profile_id bigint,
+    out validation_failure_message text,
+    out active_profile learning.active_profile
+)
+returns record
+language plpgsql
+security definer
+as $$
+begin
+    if _account_id is null then
+        validation_failure_message := 'account_id_missing';
+        return;
+    end if;
+
+    if _profile_id is null then
+        validation_failure_message := 'profile_id_missing';
+        return;
+    end if;
+
+    insert into learning.active_profile (account_id, profile_id)
+    values (_account_id, _profile_id)
+    returning *
+    into active_profile;
+
+    if not found then
+        validation_failure_message := 'profile_not_found';
+        return;
+    end if;
+
+    return;
+end;
+$$;
+
+create or replace function learning.active_profile_summary_by_account_id(
+    _account_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'account_id', ap.account_id,
+        'profile_id', ap.profile_id,
+        'language_code', p.language_code
+    )
+    from learning.active_profile ap
+    join learning.profile p
+        on p.profile_id = ap.profile_id
+    where ap.account_id = _account_id
+    order by ap.created_at desc
+    limit 1;
+$$;
+
 -- api: shuffle cues for a given profile and return the batch
 create or replace function api.shuffle_cues(
     profile_id bigint,
@@ -585,3 +648,97 @@ end;
 $$;
 
 grant execute on function api.get_cues(bigint, integer) to authenticated;
+
+create or replace function api.set_active_profile(
+    account_id bigint,
+    language_code languages.language_code
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _authenticated_account_id bigint := auth.jwt_account_id();
+    _get_or_create_account_profile_result record; -- OUT: validation_failure_message text, profile learning.profile
+    _set_active_profile_result record; -- OUT: validation_failure_message text, active_profile learning.active_profile
+begin
+    if _authenticated_account_id is null or _authenticated_account_id <> account_id then
+        raise exception 'Set Active Profile Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_set_active_profile';
+    end if;
+
+    _get_or_create_account_profile_result := learning.get_or_create_account_profile(account_id, language_code);
+    if _get_or_create_account_profile_result.validation_failure_message is not null then
+        raise exception 'Set Active Profile Failed'
+            using detail = 'Invalid Profile',
+                  hint = _get_or_create_account_profile_result.validation_failure_message;
+    end if;
+
+    _set_active_profile_result := learning.set_active_profile(
+        account_id,
+        (_get_or_create_account_profile_result.profile).profile_id
+    );
+
+    if _set_active_profile_result.validation_failure_message is not null then
+        raise exception 'Set Active Profile Failed'
+            using detail = 'Invalid Input',
+                  hint = _set_active_profile_result.validation_failure_message;
+    end if;
+
+    return to_jsonb(_set_active_profile_result.active_profile);
+end;
+$$;
+
+grant execute on function api.set_active_profile(bigint, languages.language_code) to authenticated;
+
+create or replace function accounts.account_summary(
+    _account_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'account', jsonb_build_object(
+            'account_id', a.account_id,
+            'email', a.email,
+            'phone_number', a.phone_number
+        ),
+        'account_role', ar.role,
+        'last_login_at', (
+            select max(logged_in_at)
+            from accounts.account_login
+            where account_id = a.account_id
+        )
+    )
+    from accounts.account a
+    join accounts.account_role ar
+        on ar.account_id = a.account_id
+    where a.account_id = _account_id;
+$$;
+
+create or replace function api.me()
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _authenticated_account_id bigint := auth.jwt_account_id();
+    _account_summary jsonb := accounts.account_summary(_authenticated_account_id);
+    _active_profile_summary jsonb := learning.active_profile_summary_by_account_id(_authenticated_account_id);
+begin
+    if _authenticated_account_id is null then
+        raise exception 'Get Me Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_get_me';
+    end if;
+
+    return jsonb_build_object(
+        'account', _account_summary,
+        'active_profile', _active_profile_summary
+    );
+end;
+$$;
+
+grant execute on function api.me() to authenticated;
