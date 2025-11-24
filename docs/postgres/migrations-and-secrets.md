@@ -14,19 +14,22 @@ Last verified: 2025-10-08
 - Migration files live in `postgres/migrations` and are applied in lexical order.
 - Use the script `postgres/scripts/apply_migrations.sh` with `{secrets.*}` placeholder substitution.
 - Placeholder mapping: `{secrets.secret_jwt_secret}` → env `JWT_SECRET` (strip leading `secret_`, uppercase).
-- Required env: point `--secrets` to `secrets/.env.postgres` which provides the variables consumed by placeholders.
+- Secrets are loaded automatically from `secrets/.env.postgres` (this file must exist before you run the script).
 
 ### Examples
 
 ```bash
-# Dry run
-./postgres/scripts/apply_migrations.sh --db-url "$DATABASE_URL" --dry-run --verbose
+# Apply all migrations in a single transaction (default)
+./postgres/scripts/apply_migrations.sh
 
-# Apply all in a single transaction (default)
-./postgres/scripts/apply_migrations.sh --db-url "$DATABASE_URL" --verbose
+# Apply all migrations with verbose logging
+./postgres/scripts/apply_migrations.sh --verbose
 
-# Apply per-file (each migration in its own transaction)
-./postgres/scripts/apply_migrations.sh --db-url "$DATABASE_URL" --per-file --verbose
+# Apply each migration file in its own transaction
+./postgres/scripts/apply_migrations.sh --per-file
+
+# Apply only one migration file by name (with or without .sql)
+./postgres/scripts/apply_migrations.sh --only 1756074400_magic_link_login
 ```
 
 ### Secrets files
