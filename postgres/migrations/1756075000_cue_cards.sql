@@ -763,6 +763,16 @@ values (
 )
 on conflict (key) do nothing;
 
+insert into internal.config (
+    key,
+    value
+)
+values (
+    'flags',
+    '[]'
+)
+on conflict (key) do nothing;
+
 create or replace function api.app_config()
 returns jsonb
 language plpgsql
@@ -771,7 +781,8 @@ as $$
 begin
     return jsonb_build_object(
         'default_profile_language_code', internal.get_config('default_profile_language_code'),
-        'available_language_codes', internal.get_config('available_language_codes')
+        'available_language_codes', internal.get_config('available_language_codes'),
+        'flags', internal.get_config('flags')
     );
 end;
 $$;
