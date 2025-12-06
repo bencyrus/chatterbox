@@ -44,7 +44,10 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"path":        r.URL.Path,
 	})
 
-	// Preflight token refresh only when the access token is nearing expiry
+	// Preflight token refresh only when the access token is nearing expiry.
+	// When a refresh succeeds, the proxied request uses the refreshed access
+	// token so that callers do not see spurious 401s for tokens that were
+	// just rotated.
 	var refreshed *auth.RefreshResult
 	if auth.ShouldRefreshAccessToken(g.cfg, r.Header, time.Now()) && r.Header.Get(g.cfg.RefreshTokenHeaderIn) != "" {
 		logger.Debug(ctx, "attempting token refresh")
@@ -60,6 +63,14 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.URL.Scheme = g.backend.Scheme
 			req.URL.Host = g.backend.Host
 			// Preserve original path and query
+			// If we obtained refreshed tokens with a non-empty access token,
+			// ensure the proxied request uses the refreshed access token.
+			// The refresh token is only consumed by the gateway on future
+			// client requests, so there is no need to forward the updated
+			// refresh token to PostgREST here.
+			if refreshed != nil && refreshed.AccessToken != "" {
+				req.Header.Set("Authorization", "Bearer "+refreshed.AccessToken)
+			}
 			// Ensure X-Request-ID is present and forwarded
 			if req.Header.Get("X-Request-ID") == "" {
 				if rid, ok := req.Context().Value(logger.RequestIDKey).(string); ok && rid != "" {

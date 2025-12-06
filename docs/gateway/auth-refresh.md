@@ -13,7 +13,9 @@ Last verified: 2025-10-08
 
 - Parse `Authorization: Bearer <token>` using `JWT_SECRET` (HS256) to read `exp`.
 - If seconds remaining ≤ `REFRESH_THRESHOLD_SECONDS` and a refresh header is present, attempt a preflight refresh with ~2s timeout.
-- On success, attach refreshed tokens to response headers; the proxied request proceeds regardless of refresh outcome.
+- On success:
+  - Use the refreshed access token for the proxied request to PostgREST.
+  - Attach refreshed tokens to response headers so clients can update their stored tokens.
 
 ### Key code paths
 
@@ -67,7 +69,9 @@ curl -i \
 
 ### Behavior notes
 
-- Best‑effort: failure never blocks the proxied request.
+- Best‑effort:
+  - When refresh succeeds, the proxied request uses the refreshed access token.
+  - When refresh fails or times out, the proxied request proceeds with the original tokens; callers may still see 401/403 from PostgREST.
 - Only attempts refresh when both conditions are met (near expiry and refresh header present).
 
 ### See also
