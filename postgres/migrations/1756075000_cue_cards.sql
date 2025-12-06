@@ -393,11 +393,12 @@ begin
         insert into learning.cue_seen (profile_id, cue_id, cue_content_id)
         select _profile_id, cue_id, cue_content_id
         from candidate_cues
-        returning cue_id, cue_content_id
+        returning cue_seen_id, cue_id, cue_content_id, seen_at
     )
     select coalesce(
         jsonb_agg(
             cues.build_cue_with_content(c, cc)
+            order by inserted.seen_at desc, inserted.cue_id
         ),
         '[]'::jsonb
     )
@@ -558,14 +559,15 @@ begin
             cs.seen_at,
             c as cue,
             cc as cue_content,
+            c.cue_id,
             -- rank multiple viewings of the same cue for this profile, most recent first
             row_number() over (
                 partition by c.cue_id
                 order by cs.seen_at desc
             ) as occurrence_rank,
-            -- rank distinct cues by most recent seen_at across this profile
+            -- rank distinct cues by most recent seen_at (and cue_id as a stable tie-breaker)
             row_number() over (
-                order by cs.seen_at desc
+                order by cs.seen_at desc, c.cue_id
             ) as recency_rank
         from learning.cue_seen cs
         join cues.cue_content cc
@@ -579,7 +581,7 @@ begin
         coalesce(
             jsonb_agg(
                 cues.build_cue_with_content(recent_seen.cue, recent_seen.cue_content)
-                order by recent_seen.seen_at desc
+                order by recent_seen.seen_at desc, recent_seen.cue_id
             ),
             '[]'::jsonb
         )
