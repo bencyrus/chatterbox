@@ -525,7 +525,7 @@ $$;
 
 grant execute on function api.shuffle_cues(bigint, integer) to authenticated;
 
--- function: get recent cues for a profile and top up with shuffled ones if needed
+-- function: get recent cues for a profile or shuffle if none exist
 create or replace function cues.get_cues(
     _profile_id bigint,
     _language_code languages.language_code,
@@ -540,9 +540,6 @@ as $$
 declare
     -- normalize count to [1, 100], defaulting to 10 when null
     _normalized_count integer := least(greatest(1, coalesce(_count, 10)), 100);
-    _existing_items jsonb := '[]'::jsonb;
-    _existing_count integer := 0;
-    _remaining integer;
     _shuffle_result record;
 begin
     if _profile_id is null then
@@ -555,12 +552,21 @@ begin
         return;
     end if;
 
-    -- fetch up to _normalized_count most recently seen published cues for this profile
+    -- fetch up to _normalized_count distinct recently seen published cues for this profile
     with recent_seen as (
         select
             cs.seen_at,
             c as cue,
-            cc as cue_content
+            cc as cue_content,
+            -- rank multiple viewings of the same cue for this profile, most recent first
+            row_number() over (
+                partition by c.cue_id
+                order by cs.seen_at desc
+            ) as occurrence_rank,
+            -- rank distinct cues by most recent seen_at across this profile
+            row_number() over (
+                order by cs.seen_at desc
+            ) as recency_rank
         from learning.cue_seen cs
         join cues.cue_content cc
             on cc.cue_content_id = cs.cue_content_id
@@ -568,8 +574,6 @@ begin
             on c.cue_id = cc.cue_id
         where cs.profile_id = _profile_id
           and c.stage = 'published'
-        order by cs.seen_at desc
-        limit _normalized_count
     )
     select
         coalesce(
@@ -578,27 +582,26 @@ begin
                 order by recent_seen.seen_at desc
             ),
             '[]'::jsonb
-        ),
-        count(*)
-    into _existing_items, _existing_count
-    from recent_seen;
+        )
+    into result
+    from recent_seen
+    where occurrence_rank = 1
+      and recency_rank <= _normalized_count;
 
-    if _existing_count = _normalized_count then
-        result := _existing_items;
+    -- if we found any recent cues, return them
+    if jsonb_array_length(result) > 0 then
         return;
     end if;
 
-    _remaining := _normalized_count - _existing_count;
-
-    -- top up with shuffled cues for this profile
-    _shuffle_result := cues.shuffle_cues(_profile_id, _language_code, _remaining);
+    -- no recent cues exist, shuffle to get fresh ones
+    _shuffle_result := cues.shuffle_cues(_profile_id, _language_code, _normalized_count);
 
     if _shuffle_result.validation_failure_message is not null then
         validation_failure_message := _shuffle_result.validation_failure_message;
         return;
     end if;
 
-    result := _existing_items || coalesce(_shuffle_result.result, '[]'::jsonb);
+    result := coalesce(_shuffle_result.result, '[]'::jsonb);
     return;
 end;
 $$;
