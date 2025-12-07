@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	cloud.google.com/go/storage v1.58.0
 	github.com/bencyrus/chatterbox/shared v0.0.0
+	github.com/lib/pq v1.10.9
 )
 
 require (

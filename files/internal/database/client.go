@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	filetypes "github.com/bencyrus/chatterbox/files/internal/types"
+	_ "github.com/lib/pq"
 )
 
 // Client wraps a sql.DB for the files service.
