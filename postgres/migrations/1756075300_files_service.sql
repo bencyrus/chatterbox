@@ -92,16 +92,12 @@ language sql
 stable
 security definer
 as $$
-    select 
-        to_jsonb(f) || 
-        jsonb_build_object(
-            'metadata', 
-            coalesce(jsonb_object_agg(m.key, m.value), '{}'::jsonb)
-        )
+    select jsonb_build_object(
+        'files',
+        coalesce(jsonb_agg(f.file_id), '[]'::jsonb)
+    )
     from files.file f
-    left join files.file_metadata m using (file_id)
-    where f.object_key = 'internal-assets/chatterbox-logo-color-bg.png'
-    group by f.file_id;
+    where f.object_key = 'internal-assets/chatterbox-logo-color-bg.png';
 $$;
 
 grant execute on function api.app_icon() to anon, authenticated;

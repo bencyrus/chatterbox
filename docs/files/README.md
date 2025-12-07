@@ -57,7 +57,7 @@ Last verified: 2025-12-07
 - Port: `PORT` (optional, default `8080` in the service; mapped to `9090` in `docker-compose`).
 - Build/run: [`files/Dockerfile`](../../files/Dockerfile)
 - Database:
-  - `DATABASE_URL` points at Postgres as `files_service_user` (created in [`postgres/migrations/1756075300_files_service.sql`](../../postgres/migrations/1756075300_files_service.sql)).
+  - `DATABASE_URL` points at Postgres as `file_service_user` (created in [`postgres/migrations/1756075300_files_service.sql`](../../postgres/migrations/1756075300_files_service.sql)).
   - Uses `files.lookup_files(bigint[])` to resolve IDs to metadata; today this is a stub that returns placeholder bucket/object information.
 - GCS signing:
   - `GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_EMAIL`
