@@ -80,6 +80,7 @@ Example configuration template: [`secrets/.env.gateway.example`](../../secrets/.
 
 ### See also
 
+- User recording uploads (end-to-end flow): [`../postgres/user-recording-uploads.md`](../postgres/user-recording-uploads.md)
 - Auth refresh: [`./auth-refresh.md`](./auth-refresh.md)
 - Files service: [`../files/README.md`](../files/README.md)
 - Gateway index: [`./README.md`](./README.md)

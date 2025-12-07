@@ -146,5 +146,6 @@ See [`postgres/migrations/1756075400_recording_uploads.sql`](../../postgres/migr
 
 ### See also
 
+- User recording uploads (end-to-end flow): [`../postgres/user-recording-uploads.md`](../postgres/user-recording-uploads.md)
 - Gateway file URL injection: [`../gateway/files-injection.md`](../gateway/files-injection.md)
 - Shared components: [`../shared/README.md`](../shared/README.md)

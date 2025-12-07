@@ -32,6 +32,7 @@ Last verified: 2025-10-08
   - [Queues and Worker](postgres/queues-and-worker.md)
   - [Communications (email and SMS)](postgres/comms.md)
   - [OTP Login (passwordless)](postgres/otp-login.md)
+  - [User Recording Uploads](postgres/user-recording-uploads.md)
   - [Migrations and Secrets](postgres/migrations-and-secrets.md)
 
 - [Gateway](gateway/README.md)

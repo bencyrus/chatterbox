@@ -288,10 +288,78 @@ as $$
       and pcr.cue_id = _cue_id;
 $$;
 
+-- function: get file details for UI display
+create or replace function files.file_details(
+    _file_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'file_id', f.file_id,
+        'created_at', f.created_at,
+        'mime_type', f.mime_type,
+        'metadata', coalesce(
+            (
+                select jsonb_object_agg(fm.key, fm.value)
+                from files.file_metadata fm
+                where fm.file_id = f.file_id
+            ),
+            '{}'::jsonb
+        )
+    )
+    from files.file f
+    where f.file_id = _file_id;
+$$;
+
+-- function: create file metadata from json (only valid keys)
+create or replace function files.create_file_metadata(
+    _file_id bigint,
+    _metadata jsonb
+)
+returns void
+language plpgsql
+as $$
+declare
+    _key text;
+    _value jsonb;
+begin
+    if _metadata is null or _metadata = 'null'::jsonb then
+        return;
+    end if;
+
+    -- iterate through all keys in the metadata json
+    for _key, _value in select * from jsonb_each(_metadata)
+    loop
+        -- only insert if the key is a valid metadata_key
+        begin
+            insert into files.file_metadata (
+                file_id,
+                key,
+                value
+            )
+            values (
+                _file_id,
+                _key::files.metadata_key,
+                _value
+            )
+            on conflict (file_id, key) do update
+                set value = excluded.value;
+        exception
+            when check_violation then
+                -- silently skip invalid keys
+                continue;
+        end;
+    end loop;
+end;
+$$;
+
 -- function: complete recording upload
 create or replace function learning.complete_recording_upload(
     _upload_intent_id bigint,
     _account_id bigint,
+    _metadata jsonb default null,
     out validation_failure_message text,
     out profile_cue_recording learning.profile_cue_recording
 )
@@ -366,6 +434,11 @@ begin
     returning file_id
     into _file_id;
 
+    -- create file metadata (only valid keys)
+    if _metadata is not null then
+        perform files.create_file_metadata(_file_id, _metadata);
+    end if;
+
     -- create profile_cue_recording link
     insert into learning.profile_cue_recording (
         profile_id,
@@ -386,7 +459,8 @@ $$;
 
 -- api: complete recording upload
 create or replace function api.complete_recording_upload(
-    upload_intent_id bigint
+    upload_intent_id bigint,
+    metadata jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -395,6 +469,7 @@ as $$
 declare
     _authenticated_account_id bigint := auth.jwt_account_id();
     _complete_result record;
+    _file_id bigint;
 begin
     if _authenticated_account_id is null then
         raise exception 'Complete Recording Upload Failed'
@@ -404,7 +479,8 @@ begin
 
     _complete_result := learning.complete_recording_upload(
         upload_intent_id,
-        _authenticated_account_id
+        _authenticated_account_id,
+        metadata
     );
 
     if _complete_result.validation_failure_message is not null then
@@ -413,39 +489,17 @@ begin
                   hint = _complete_result.validation_failure_message;
     end if;
 
+    _file_id := (_complete_result.profile_cue_recording).file_id;
+
     return jsonb_build_object(
         'success', true,
-        'files', jsonb_build_array((_complete_result.profile_cue_recording).file_id)
+        'file', files.file_details(_file_id),
+        'files', jsonb_build_array(_file_id)
     );
 end;
 $$;
 
-grant execute on function api.complete_recording_upload(bigint) to authenticated;
-
--- function: get file details for UI display
-create or replace function files.file_details(
-    _file_id bigint
-)
-returns jsonb
-language sql
-stable
-as $$
-    select jsonb_build_object(
-        'file_id', f.file_id,
-        'created_at', f.created_at,
-        'mime_type', f.mime_type,
-        'metadata', coalesce(
-            (
-                select jsonb_object_agg(fm.key, fm.value)
-                from files.file_metadata fm
-                where fm.file_id = f.file_id
-            ),
-            '{}'::jsonb
-        )
-    )
-    from files.file f
-    where f.file_id = _file_id;
-$$;
+grant execute on function api.complete_recording_upload(bigint, jsonb) to authenticated;
 
 -- function: get cue recording history for a profile
 create or replace function learning.cue_recording_history_for_profile(
@@ -540,4 +594,82 @@ end;
 $$;
 
 grant execute on function api.get_cue_for_profile(bigint, bigint) to authenticated;
+
+-- function: get all recording history for a profile
+create or replace function learning.profile_recording_history(
+    _profile_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select coalesce(
+        (
+            select jsonb_agg(
+                to_jsonb(pcr) || jsonb_build_object(
+                    'file', files.file_details(pcr.file_id),
+                    'cue', cues.cue_info_by_id(
+                        pcr.cue_id,
+                        true,
+                        p.language_code
+                    )
+                )
+                order by pcr.created_at desc
+            )
+            from learning.profile_cue_recording pcr
+            cross join learning.profile p
+            where pcr.profile_id = _profile_id
+              and p.profile_id = _profile_id
+        ),
+        '[]'::jsonb
+    );
+$$;
+
+-- api: get all recording history for a profile
+create or replace function api.get_profile_recording_history(
+    profile_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _authenticated_account_id bigint := auth.jwt_account_id();
+    _profile learning.profile := learning.profile_by_id(profile_id);
+    _recordings jsonb;
+    _file_ids bigint[];
+begin
+    if _authenticated_account_id is null then
+        raise exception 'Get Profile Recording History Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_get_profile_recording_history';
+    end if;
+
+    if _profile.profile_id is null then
+        raise exception 'Get Profile Recording History Failed'
+            using detail = 'Invalid Profile',
+                  hint = 'profile_not_found';
+    end if;
+
+    if _profile.account_id <> _authenticated_account_id then
+        raise exception 'Get Profile Recording History Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_get_profile_recording_history';
+    end if;
+
+    _recordings := learning.profile_recording_history(profile_id);
+
+    -- extract file IDs from recordings for gateway download URL injection
+    select array_agg((rec->>'file_id')::bigint)
+    into _file_ids
+    from jsonb_array_elements(_recordings) as rec;
+
+    return jsonb_build_object(
+        'recordings', _recordings,
+        'files', coalesce(to_jsonb(_file_ids), '[]'::jsonb)
+    );
+end;
+$$;
+
+grant execute on function api.get_profile_recording_history(bigint) to authenticated;
 

@@ -61,6 +61,7 @@ Last verified: 2025-10-08
   - [Queues and Worker](queues-and-worker.md)
   - [Comms](comms.md)
   - [OTP Login](otp-login.md)
+  - [User Recording Uploads](user-recording-uploads.md)
   - [Migrations and Secrets](migrations-and-secrets.md)
 - Security/grants:
   - See: [Security and Grants](security.md)
