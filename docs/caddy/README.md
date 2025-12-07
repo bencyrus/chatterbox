@@ -37,7 +37,7 @@ Last verified: 2025-10-08
 
 ### AASA (Apple App Site Association) for Universal Links
 
-- When using universal links on `glovee.io`, serve the AASA JSON at:
+- When using universal links on `chatterboxtalk.com`, serve the AASA JSON at:
   - `/.well-known/apple-app-site-association`
   - `/apple-app-site-association`
 - The Caddyfile includes static handlers that respond with JSON using env placeholders:

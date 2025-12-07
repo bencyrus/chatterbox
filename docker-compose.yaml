@@ -73,6 +73,7 @@ services:
       - gateway
       - files
       - swaggerui
+      - web
     labels:
       # Datadog log collection
       - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
@@ -138,6 +139,23 @@ services:
       - gateway
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "swaggerui", "service": "swaggerui"}]'
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: development
+    container_name: web
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    networks:
+      - chattterbox-network
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "web", "service": "web"}]'
 
 volumes:
   caddy_data:

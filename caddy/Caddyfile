@@ -1,4 +1,4 @@
-api.glovee.io {
+api.chatterboxtalk.com {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
@@ -13,7 +13,7 @@ api.glovee.io {
     }
 }
 
-docs.glovee.io {
+docs.chatterboxtalk.com {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
@@ -35,7 +35,7 @@ docs.glovee.io {
     }
 }
 
-glovee.io {
+chatterboxtalk.com {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
@@ -90,8 +90,10 @@ EOF
 EOF
     }
 
-    # Default: 204 for other requests (no content)
-    respond 204
+    # Serve the marketing website
+    reverse_proxy web:5173 {
+        header_up X-Request-ID {http.request.uuid}
+    }
 
     log {
         output stdout
