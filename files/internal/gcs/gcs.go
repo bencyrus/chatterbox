@@ -20,3 +20,18 @@ func SignedDownloadURL(bucket, objectKey, serviceAccountEmail, privateKey string
 		PrivateKey:     []byte(key),
 	})
 }
+
+// SignedUploadURL generates a V4 signed URL for uploading an object to GCS.
+func SignedUploadURL(bucket, objectKey, contentType, serviceAccountEmail, privateKey string, ttl time.Duration) (string, error) {
+	// Convert literal \n sequences back into real newlines for the private key.
+	key := strings.ReplaceAll(privateKey, `\n`, "\n")
+
+	return storage.SignedURL(bucket, objectKey, &storage.SignedURLOptions{
+		Scheme:         storage.SigningSchemeV4,
+		Method:         "PUT",
+		Expires:        time.Now().Add(ttl),
+		GoogleAccessID: serviceAccountEmail,
+		PrivateKey:     []byte(key),
+		ContentType:    contentType,
+	})
+}

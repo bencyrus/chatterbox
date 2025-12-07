@@ -38,6 +38,14 @@ as $$
     select coalesce((internal.get_config('magic_login')->>'token_expiry_seconds')::int, 900);
 $$;
 
+create or replace function auth.magic_link_base_url()
+returns text
+stable
+language sql
+as $$
+    select (internal.get_config('magic_login')->>'link_https_base_url')::text;
+$$;
+
 create or replace function auth.hash_magic_token(_token text)
 returns bytea
 immutable
@@ -107,7 +115,7 @@ declare
     _magic_token_result record;
     _token_expiry_seconds integer := auth.magic_token_expiry_seconds();
     _token_expiry_minutes integer := greatest(1, (_token_expiry_seconds / 60));
-    _magic_link_base_url text := internal.get_config('magic_login')->>'link_https_base_url';
+    _magic_link_base_url text := auth.magic_link_base_url();
     _magic_link_url text;
     _rendered_email record;
     _rendered_sms_body text;

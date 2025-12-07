@@ -31,7 +31,8 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", httpSrv.HealthzHandler)
-	mux.HandleFunc("/signed_url", httpSrv.SignedURLHandler)
+	mux.HandleFunc("/signed_download_url", httpSrv.SignedDownloadURLHandler)
+	mux.HandleFunc("/signed_upload_url", httpSrv.SignedUploadURLHandler)
 
 	// Enforce FILE_SERVICE_API_KEY on all endpoints except /healthz.
 	protected := httpSrv.WithAPIKeyAuth(mux)

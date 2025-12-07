@@ -56,3 +56,22 @@ func (c *Client) LookupFiles(ctx context.Context, ids []int64) ([]filetypes.File
 	}
 	return out, nil
 }
+
+// LookupUploadIntent calls files.lookup_upload_intent(bigint) and returns the result as UploadIntentMetadata.
+func (c *Client) LookupUploadIntent(ctx context.Context, uploadIntentID int64) (*filetypes.UploadIntentMetadata, error) {
+	const query = `select * from files.lookup_upload_intent($1)`
+
+	var raw []byte
+	if err := c.db.QueryRowContext(ctx, query, uploadIntentID).Scan(&raw); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("upload intent not found: %d", uploadIntentID)
+		}
+		return nil, fmt.Errorf("query lookup_upload_intent: %w", err)
+	}
+
+	var out filetypes.UploadIntentMetadata
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal lookup_upload_intent result: %w", err)
+	}
+	return &out, nil
+}

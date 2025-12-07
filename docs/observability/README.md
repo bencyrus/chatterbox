@@ -44,7 +44,7 @@ services:
 
 - Files service
 
-  - Initializes logger as `files`, exposes `/healthz` and `/signed_url` endpoints.
+  - Initializes logger as `files`, exposes `/healthz`, `/signed_download_url`, and `/signed_upload_url` endpoints.
   - Logs request id (if present), input size, and the number of processed file items.
 
 - Worker

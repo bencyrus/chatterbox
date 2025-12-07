@@ -3,7 +3,6 @@ package httpserver
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/bencyrus/chatterbox/files/internal/config"
@@ -58,12 +57,12 @@ func (s *Server) HealthzHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
-// SignedURLHandler processes signed URL requests for files.
-func (s *Server) SignedURLHandler(w http.ResponseWriter, r *http.Request) {
+// SignedDownloadURLHandler processes signed download URL requests for files.
+func (s *Server) SignedDownloadURLHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	if r.Method != http.MethodPost {
-		logger.Warn(ctx, "invalid method for signed_url endpoint", logger.Fields{
+		logger.Warn(ctx, "invalid method for signed_download_url endpoint", logger.Fields{
 			"method": r.Method,
 		})
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -96,21 +95,11 @@ func (s *Server) SignedURLHandler(w http.ResponseWriter, r *http.Request) {
 		"files_count": len(items),
 	})
 
-	// Normalize file IDs to int64 for database lookup.
-	var normalizedIDs []int64
+	// Convert file IDs from float64 (JSON numbers) to int64 for database lookup
+	normalizedIDs := make([]int64, 0, len(items))
 	for _, item := range items {
-		switch v := item.(type) {
-		case float64:
-			normalizedIDs = append(normalizedIDs, int64(v))
-		case string:
-			if v == "" {
-				continue
-			}
-			if id, err := strconv.ParseInt(v, 10, 64); err == nil {
-				normalizedIDs = append(normalizedIDs, id)
-			}
-		default:
-			// ignore unsupported types
+		if fileID, ok := item.(float64); ok {
+			normalizedIDs = append(normalizedIDs, int64(fileID))
 		}
 	}
 
@@ -158,6 +147,77 @@ func (s *Server) SignedURLHandler(w http.ResponseWriter, r *http.Request) {
 
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(out); err != nil {
+		logger.Error(ctx, "failed to encode response", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+// SignedUploadURLHandler processes signed upload URL requests for upload intents.
+func (s *Server) SignedUploadURLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method != http.MethodPost {
+		logger.Warn(ctx, "invalid method for signed_upload_url endpoint", logger.Fields{
+			"method": r.Method,
+		})
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		logger.Error(ctx, "failed to decode request body", err)
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	uploadIntentRaw, ok := body["upload_intent_id"]
+	if !ok {
+		logger.Warn(ctx, "missing upload_intent_id field in request")
+		http.Error(w, "missing upload_intent_id", http.StatusBadRequest)
+		return
+	}
+
+	logger.Debug(ctx, "processing signed upload URL request")
+
+	// JSON numbers decode as float64 in Go
+	uploadIntentID, ok := uploadIntentRaw.(float64)
+	if !ok {
+		logger.Warn(ctx, "upload_intent_id is not a number")
+		http.Error(w, "invalid upload_intent_id", http.StatusBadRequest)
+		return
+	}
+
+	intent, err := s.db.LookupUploadIntent(ctx, int64(uploadIntentID))
+	if err != nil {
+		logger.Error(ctx, "failed to lookup upload intent in database", err, logger.Fields{
+			"upload_intent_id": int64(uploadIntentID),
+		})
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	ttl := time.Duration(s.cfg.GCSSignedURLTTLSeconds) * time.Second
+	url, err := gcs.SignedUploadURL(intent.Bucket, intent.ObjectKey, intent.MimeType, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
+	if err != nil {
+		logger.Error(ctx, "failed to generate signed upload URL", err, logger.Fields{
+			"upload_intent_id": int64(uploadIntentID),
+		})
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info(ctx, "signed upload URL generated successfully", logger.Fields{
+		"upload_intent_id": int64(uploadIntentID),
+	})
+
+	response := map[string]any{
+		"upload_url": url,
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(response); err != nil {
 		logger.Error(ctx, "failed to encode response", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}

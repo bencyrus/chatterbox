@@ -19,11 +19,14 @@ type Config struct {
 	NewAccessTokenHeaderOut  string
 	NewRefreshTokenHeaderOut string
 	// File service
-	FileServiceURL          string
-	FileSignedURLPath       string
-	FilesFieldName          string
-	ProcessedFilesFieldName string
-	FileServiceAPIKey       string
+	FileServiceURL            string
+	FileSignedDownloadURLPath string
+	FileSignedUploadURLPath   string
+	FilesFieldName            string
+	ProcessedFilesFieldName   string
+	UploadIntentFieldName     string
+	UploadURLFieldName        string
+	FileServiceAPIKey         string
 	// HTTP client
 	HTTPClientTimeoutSeconds int
 }
@@ -40,11 +43,14 @@ const (
 	EnvNewAccessTokenHeaderOut  = "NEW_ACCESS_TOKEN_HEADER_OUT"
 	EnvNewRefreshTokenHeaderOut = "NEW_REFRESH_TOKEN_HEADER_OUT"
 	// Files
-	EnvFileServiceURL          = "FILE_SERVICE_URL"
-	EnvFileSignedURLPath       = "FILE_SIGNED_URL_PATH"
-	EnvFilesFieldName          = "FILES_FIELD_NAME"
-	EnvProcessedFilesFieldName = "PROCESSED_FILES_FIELD_NAME"
-	EnvFileServiceAPIKey       = "FILE_SERVICE_API_KEY"
+	EnvFileServiceURL            = "FILE_SERVICE_URL"
+	EnvFileSignedDownloadURLPath = "FILE_SIGNED_DOWNLOAD_URL_PATH"
+	EnvFileSignedUploadURLPath   = "FILE_SIGNED_UPLOAD_URL_PATH"
+	EnvFilesFieldName            = "FILES_FIELD_NAME"
+	EnvProcessedFilesFieldName   = "PROCESSED_FILES_FIELD_NAME"
+	EnvUploadIntentFieldName     = "UPLOAD_INTENT_FIELD_NAME"
+	EnvUploadURLFieldName        = "UPLOAD_URL_FIELD_NAME"
+	EnvFileServiceAPIKey         = "FILE_SERVICE_API_KEY"
 	// HTTP
 	EnvHTTPClientTimeoutSeconds = "HTTP_CLIENT_TIMEOUT_SECONDS"
 )
@@ -85,9 +91,12 @@ func Load() Config {
 		EnvRefreshTokensPath,
 		EnvRefreshThresholdSeconds,
 		EnvFileServiceURL,
-		EnvFileSignedURLPath,
+		EnvFileSignedDownloadURLPath,
+		EnvFileSignedUploadURLPath,
 		EnvFilesFieldName,
 		EnvProcessedFilesFieldName,
+		EnvUploadIntentFieldName,
+		EnvUploadURLFieldName,
 		EnvFileServiceAPIKey,
 	}
 	requiredEnvVars, missingEnvVars := collectRequired(required)
@@ -114,19 +123,22 @@ func Load() Config {
 	}
 
 	return Config{
-		Port:                     optionalEnvVars[EnvPort],
-		PostgRESTURL:             requiredEnvVars[EnvPostgRESTURL],
-		JWTSecret:                requiredEnvVars[EnvJWTSecret],
-		RefreshTokensPath:        requiredEnvVars[EnvRefreshTokensPath],
-		RefreshThresholdSeconds:  threshold,
-		RefreshTokenHeaderIn:     optionalEnvVars[EnvRefreshTokenHeaderIn],
-		NewAccessTokenHeaderOut:  optionalEnvVars[EnvNewAccessTokenHeaderOut],
-		NewRefreshTokenHeaderOut: optionalEnvVars[EnvNewRefreshTokenHeaderOut],
-		FileServiceURL:           requiredEnvVars[EnvFileServiceURL],
-		FileSignedURLPath:        requiredEnvVars[EnvFileSignedURLPath],
-		FilesFieldName:           requiredEnvVars[EnvFilesFieldName],
-		ProcessedFilesFieldName:  requiredEnvVars[EnvProcessedFilesFieldName],
-		FileServiceAPIKey:        requiredEnvVars[EnvFileServiceAPIKey],
-		HTTPClientTimeoutSeconds: httpTimeout,
+		Port:                      optionalEnvVars[EnvPort],
+		PostgRESTURL:              requiredEnvVars[EnvPostgRESTURL],
+		JWTSecret:                 requiredEnvVars[EnvJWTSecret],
+		RefreshTokensPath:         requiredEnvVars[EnvRefreshTokensPath],
+		RefreshThresholdSeconds:   threshold,
+		RefreshTokenHeaderIn:      optionalEnvVars[EnvRefreshTokenHeaderIn],
+		NewAccessTokenHeaderOut:   optionalEnvVars[EnvNewAccessTokenHeaderOut],
+		NewRefreshTokenHeaderOut:  optionalEnvVars[EnvNewRefreshTokenHeaderOut],
+		FileServiceURL:            requiredEnvVars[EnvFileServiceURL],
+		FileSignedDownloadURLPath: requiredEnvVars[EnvFileSignedDownloadURLPath],
+		FileSignedUploadURLPath:   requiredEnvVars[EnvFileSignedUploadURLPath],
+		FilesFieldName:            requiredEnvVars[EnvFilesFieldName],
+		ProcessedFilesFieldName:   requiredEnvVars[EnvProcessedFilesFieldName],
+		UploadIntentFieldName:     requiredEnvVars[EnvUploadIntentFieldName],
+		UploadURLFieldName:        requiredEnvVars[EnvUploadURLFieldName],
+		FileServiceAPIKey:         requiredEnvVars[EnvFileServiceAPIKey],
+		HTTPClientTimeoutSeconds:  httpTimeout,
 	}
 }

@@ -12,7 +12,7 @@ Last verified: 2025-12-07
 ### How it works
 
 - On successful JSON responses (`Content-Type` includes `application/json`), buffer and inspect the body.
-- If a top‑level array named by `FILES_FIELD_NAME` exists and is non‑empty, POST `{ "files": [...] }` to `FILE_SERVICE_URL + FILE_SIGNED_URL_PATH` with an internal API key header.
+- If a top‑level array named by `FILES_FIELD_NAME` exists and is non‑empty, POST `{ "files": [...] }` to `FILE_SERVICE_URL + FILE_SIGNED_DOWNLOAD_URL_PATH` (e.g., `/signed_download_url`) with an internal API key header.
 - On success, add `PROCESSED_FILES_FIELD_NAME` with the service’s response while keeping the original JSON intact; on any error, restore the original body.
 
 ### Key code paths
@@ -59,9 +59,12 @@ Last verified: 2025-12-07
 
 - Required:
   - `FILE_SERVICE_URL`
-  - `FILE_SIGNED_URL_PATH`
+  - `FILE_SIGNED_DOWNLOAD_URL_PATH`
+  - `FILE_SIGNED_UPLOAD_URL_PATH`
   - `FILES_FIELD_NAME`
   - `PROCESSED_FILES_FIELD_NAME`
+  - `UPLOAD_INTENT_FIELD_NAME`
+  - `UPLOAD_URL_FIELD_NAME`
   - `FILE_SERVICE_API_KEY` (shared secret used to authenticate to the files service)
 - Optional:
   - `HTTP_CLIENT_TIMEOUT_SECONDS` (default derived from config, e.g., `10`).

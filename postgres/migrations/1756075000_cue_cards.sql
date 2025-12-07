@@ -778,6 +778,31 @@ values (
 )
 on conflict (key) do nothing;
 
+-- config helpers
+create or replace function internal.default_profile_language_code()
+returns jsonb
+stable
+language sql
+as $$
+    select internal.get_config('default_profile_language_code');
+$$;
+
+create or replace function internal.available_language_codes()
+returns jsonb
+stable
+language sql
+as $$
+    select internal.get_config('available_language_codes');
+$$;
+
+create or replace function internal.flags()
+returns jsonb
+stable
+language sql
+as $$
+    select internal.get_config('flags');
+$$;
+
 create or replace function api.app_config()
 returns jsonb
 language plpgsql
@@ -785,9 +810,9 @@ security definer
 as $$
 begin
     return jsonb_build_object(
-        'default_profile_language_code', internal.get_config('default_profile_language_code'),
-        'available_language_codes', internal.get_config('available_language_codes'),
-        'flags', internal.get_config('flags')
+        'default_profile_language_code', internal.default_profile_language_code(),
+        'available_language_codes', internal.available_language_codes(),
+        'flags', internal.flags()
     );
 end;
 $$;

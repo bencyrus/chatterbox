@@ -24,12 +24,13 @@ Last verified: 2025-12-07
   - Initializes a `Server` from [`files/internal/httpserver/server.go`](../../files/internal/httpserver/server.go) with configuration and a DB client from [`files/internal/database/client.go`](../../files/internal/database/client.go).
   - Registers:
     - `GET /healthz` (public, no authentication).
-    - `POST /signed_url` (protected by an internal API key).
+    - `POST /signed_download_url` (protected by an internal API key).
+    - `POST /signed_upload_url` (protected by an internal API key).
   - Wraps the mux with:
     - `WithAPIKeyAuth` to enforce `FILE_SERVICE_API_KEY` on all non‑health requests.
     - Shared `RequestIDMiddleware` for consistent request IDs and logging.
 
-- Signed URL flow
+- Signed download URL flow
 
   - Gateway discovers a top‑level `files` array in a JSON response and POSTs:
 
@@ -37,13 +38,36 @@ Last verified: 2025-12-07
     { "files": [1, 2, 3] }
     ```
 
-    to `FILE_SERVICE_URL + FILE_SIGNED_URL_PATH` with an `X-File-Service-Api-Key` header.
+    to `FILE_SERVICE_URL + FILE_SIGNED_DOWNLOAD_URL_PATH` (e.g., `/signed_download_url`) with an `X-File-Service-Api-Key` header.
 
   - The files service:
     - Normalizes the `files` entries into a list of `int64` IDs.
-    - Calls `files.lookup_files(bigint[])` (see [`postgres/migrations/1756075300_files_service.sql`](../../postgres/migrations/1756075300_files_service.sql)) to obtain per‑file metadata (placeholder implementation for now).
+    - Calls `files.lookup_files(bigint[])` (see [`postgres/migrations/1756075300_files_service.sql`](../../postgres/migrations/1756075300_files_service.sql)) to obtain per‑file metadata.
     - Uses a GCS service account (email + private key) and bucket config to generate V4 signed `GET` URLs via [`files/internal/gcs/gcs.go`](../../files/internal/gcs/gcs.go).
-    - Returns an array of `{ "file_id": <id>, "url": "<signed_url>" }` objects.
+    - Returns an array of `{ "file_id": <id>, "url": "<signed_download_url>" }` objects.
+
+- Signed upload URL flow
+
+  - Gateway discovers a top‑level `upload_intent` field (object or ID) in a JSON response and POSTs:
+
+    ```json
+    { "upload_intent": { "upload_intent_id": 123, ... } }
+    ```
+
+    or
+
+    ```json
+    { "upload_intent": 123 }
+    ```
+
+    to `FILE_SERVICE_URL + FILE_SIGNED_UPLOAD_URL_PATH` with an `X-File-Service-Api-Key` header.
+
+  - The files service:
+    - Normalizes the `upload_intent` to extract the `upload_intent_id`.
+    - Calls `files.lookup_upload_intent(bigint)` (see [`postgres/migrations/1756075400_recording_uploads.sql`](../../postgres/migrations/1756075400_recording_uploads.sql)) to obtain upload intent metadata (bucket, object_key, mime_type).
+    - Uses a GCS service account to generate V4 signed `PUT` URLs via [`files/internal/gcs/gcs.go`](../../files/internal/gcs/gcs.go).
+    - Returns `{ "upload_url": "<signed_upload_url>" }`.
+  - Gateway injects this as the `upload_url` field in the response.
 
 ### Behavior
 
@@ -66,7 +90,7 @@ Last verified: 2025-12-07
   - `GCS_CHATTERBOX_SIGNED_URL_TTL_SECONDS` (e.g. `900` seconds)
 - Internal authentication:
   - `FILE_SERVICE_API_KEY` is a shared secret between gateway and files.
-  - Gateway sends this value as `X-File-Service-Api-Key` on all `/signed_url` calls.
+  - Gateway sends this value as `X-File-Service-Api-Key` on all `/signed_download_url` and `/signed_upload_url` calls.
 
 Example configuration template: [`secrets/.env.files.example`](../../secrets/.env.files.example)
 
@@ -75,7 +99,7 @@ Example configuration template: [`secrets/.env.files.example`](../../secrets/.en
 - Request from gateway to files:
 
   ```http
-  POST /signed_url HTTP/1.1
+  POST /signed_download_url HTTP/1.1
   Host: files
   Content-Type: application/json
   X-File-Service-Api-Key: file_service_api_key
@@ -98,10 +122,27 @@ Example configuration template: [`secrets/.env.files.example`](../../secrets/.en
   ]
   ```
 
+### Upload intent workflow (recordings)
+
+User recording uploads follow a two-phase process to ensure file metadata is only created after successful upload:
+
+1. **Create intent**: User calls `api.create_recording_upload_intent(profile_id, cue_id, mime_type)` (requires authentication and profile ownership).
+   - Database generates a unique object key: `user-recordings/{profile_id}-{cue_id}-{epoch}.{ext}`.
+   - Returns upload intent with `upload_intent_id`.
+   - Gateway intercepts the `upload_intent` field and injects a `upload_url` field with the GCS signed PUT URL.
+
+2. **Upload file**: Client uploads the recording to the signed URL using HTTP PUT with the correct `Content-Type`.
+
+3. **Complete upload**: User calls `api.complete_recording_upload(upload_intent_id)` (requires authentication and ownership).
+   - Creates `files.file` record for the uploaded object.
+   - Creates `learning.profile_cue_recording` association linking the file to the profile and cue.
+   - Idempotent: if already completed, returns existing record.
+
+See [`postgres/migrations/1756075400_recording_uploads.sql`](../../postgres/migrations/1756075400_recording_uploads.sql) for schema details.
+
 ### Future
 
-- Extend the `files.file` / `files.file_metadata` model to cover more asset types (user uploads, etc.).
-- Support additional operations such as generating upload URLs directly from the files service if needed.
+- Extend the upload intent model to support other user-generated content types beyond recordings.
 
 ### See also
 

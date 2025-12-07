@@ -58,9 +58,27 @@ as $$
       and f.file_id = any(_file_ids);
 $$;
 
-
-
 grant execute on function files.lookup_files(bigint[]) to file_service_user;
+
+-- config: GCS bucket name
+insert into internal.config (
+    key,
+    value
+)
+values (
+    'gcs_bucket',
+    to_jsonb('{secrets.gcs_chatterbox_bucket}'::text)
+)
+on conflict (key) do nothing;
+
+-- function: get GCS bucket name from config
+create or replace function files.gcs_bucket()
+returns text
+stable
+language sql
+as $$
+    select (internal.get_config('gcs_bucket') #>> '{}')::text;
+$$;
 
 -- seed: app icon file stored in GCS
 insert into files.file (
@@ -69,7 +87,7 @@ insert into files.file (
     mime_type
 )
 values (
-    'chatterbox-bucket-main',
+    files.gcs_bucket(),
     'internal-assets/chatterbox-logo-color-bg.png',
     'image/png'
 )

@@ -7,3 +7,11 @@ type FileMetadata struct {
 	ObjectKey string `json:"object_key"`
 	MimeType  string `json:"mime_type"`
 }
+
+// UploadIntentMetadata represents upload intent information from the database.
+type UploadIntentMetadata struct {
+	UploadIntentID int64  `json:"upload_intent_id"`
+	Bucket         string `json:"bucket"`
+	ObjectKey      string `json:"object_key"`
+	MimeType       string `json:"mime_type"`
+}

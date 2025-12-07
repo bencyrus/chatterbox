@@ -11,9 +11,9 @@ import (
 	"github.com/bencyrus/chatterbox/gateway/internal/config"
 )
 
-// ProcessFileURLsIfNeeded reads the response body, attempts to inject signed URLs,
-// and writes back the possibly modified body. It is safe to call; on any error it restores
-// the original body and returns without propagating errors.
+// ProcessFileURLsIfNeeded reads the response body, attempts to inject signed download URLs
+// and signed upload URLs, and writes back the possibly modified body. It is safe to call;
+// on any error it restores the original body and returns without propagating errors.
 func ProcessFileURLsIfNeeded(ctx context.Context, cfg config.Config, resp *http.Response) {
 	ct := resp.Header.Get("Content-Type")
 	if ct == "" || !strings.Contains(ct, "application/json") {
@@ -28,12 +28,20 @@ func ProcessFileURLsIfNeeded(ctx context.Context, cfg config.Config, resp *http.
 		_ = resp.Body.Close()
 	}
 
-	processed, err := InjectSignedFileURLs(ctx, cfg, buf.Bytes())
+	// Chain processors: first inject download URLs, then inject upload URLs
+	processed := buf.Bytes()
+
+	// Process download file URLs
+	var err error
+	processed, err = InjectSignedFileURLs(ctx, cfg, processed)
 	if err != nil || processed == nil {
-		resp.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
-		resp.ContentLength = int64(buf.Len())
-		resp.Header.Set("Content-Length", strconv.Itoa(buf.Len()))
-		return
+		processed = buf.Bytes()
+	}
+
+	// Process upload URLs
+	processed, err = InjectSignedUploadURL(ctx, cfg, processed)
+	if err != nil || processed == nil {
+		processed = buf.Bytes()
 	}
 
 	resp.Body = io.NopCloser(bytes.NewReader(processed))
