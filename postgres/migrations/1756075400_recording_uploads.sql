@@ -1,4 +1,6 @@
 -- schema: recording upload intents and associations
+grant usage on schema files to authenticated;
+
 -- table: upload intent for user recordings
 create table if not exists files.upload_intent (
     upload_intent_id bigserial primary key,
@@ -138,6 +140,7 @@ declare
     _bucket text := files.gcs_bucket();
     _profile learning.profile;
     _cue_info jsonb;
+    _upload_intent_id bigint;
 begin
     if _profile_id is null then
         validation_failure_message := 'profile_id_missing';
@@ -151,6 +154,11 @@ begin
 
     if _mime_type is null then
         validation_failure_message := 'mime_type_missing';
+        return;
+    end if;
+
+    if _mime_type <> 'audio/mp4' then
+        validation_failure_message := 'invalid_mime_type_for_recording';
         return;
     end if;
 
@@ -187,8 +195,8 @@ begin
         _mime_type,
         _created_by
     )
-    returning upload_intent_id
-    into upload_intent_id;
+    returning files.upload_intent.upload_intent_id
+    into _upload_intent_id;
 
     -- store recording-specific metadata
     insert into learning.user_recording_upload_intent (
@@ -197,11 +205,12 @@ begin
         cue_id
     )
     values (
-        upload_intent_id,
+        _upload_intent_id,
         _profile_id,
         _cue_id
     );
 
+    upload_intent_id := _upload_intent_id;
     return;
 end;
 $$;
@@ -364,8 +373,8 @@ begin
         file_id
     )
     values (
-        _profile_id,
-        _cue_id,
+        _recording_upload_intent.profile_id,
+        _recording_upload_intent.cue_id,
         _file_id
     )
     returning *
@@ -412,4 +421,123 @@ end;
 $$;
 
 grant execute on function api.complete_recording_upload(bigint) to authenticated;
+
+-- function: get file details for UI display
+create or replace function files.file_details(
+    _file_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select jsonb_build_object(
+        'file_id', f.file_id,
+        'created_at', f.created_at,
+        'mime_type', f.mime_type,
+        'metadata', coalesce(
+            (
+                select jsonb_object_agg(fm.key, fm.value)
+                from files.file_metadata fm
+                where fm.file_id = f.file_id
+            ),
+            '{}'::jsonb
+        )
+    )
+    from files.file f
+    where f.file_id = _file_id;
+$$;
+
+-- function: get cue recording history for a profile
+create or replace function learning.cue_recording_history_for_profile(
+    _profile_id bigint,
+    _cue_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select coalesce(
+        (
+            select jsonb_agg(
+                to_jsonb(pcr) || jsonb_build_object(
+                    'file', files.file_details(pcr.file_id)
+                )
+                order by pcr.created_at desc
+            )
+            from learning.profile_cue_recording pcr
+            where pcr.profile_id = _profile_id
+              and pcr.cue_id = _cue_id
+        ),
+        '[]'::jsonb
+    );
+$$;
+
+-- function: get cue details scoped to a profile with recording history
+create or replace function learning.cue_with_recordings_for_profile(
+    _profile_id bigint,
+    _cue_id bigint
+)
+returns jsonb
+language sql
+stable
+as $$
+    select cues.cue_info_by_id(
+        _cue_id,
+        true,
+        p.language_code
+    ) || jsonb_build_object(
+        'recordings', learning.cue_recording_history_for_profile(_profile_id, _cue_id)
+    )
+    from learning.profile p
+    where p.profile_id = _profile_id;
+$$;
+
+-- api: get cue for profile with recording history
+create or replace function api.get_cue_for_profile(
+    profile_id bigint,
+    cue_id bigint
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _authenticated_account_id bigint := auth.jwt_account_id();
+    _profile learning.profile := learning.profile_by_id(profile_id);
+    _cue_with_recordings jsonb;
+    _file_ids bigint[];
+begin
+    if _authenticated_account_id is null then
+        raise exception 'Get Cue For Profile Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_get_cue_for_profile';
+    end if;
+
+    if _profile.profile_id is null then
+        raise exception 'Get Cue For Profile Failed'
+            using detail = 'Invalid Profile',
+                  hint = 'profile_not_found';
+    end if;
+
+    if _profile.account_id <> _authenticated_account_id then
+        raise exception 'Get Cue For Profile Failed'
+            using detail = 'Unauthorized',
+                  hint = 'unauthorized_to_get_cue_for_profile';
+    end if;
+
+    _cue_with_recordings := learning.cue_with_recordings_for_profile(profile_id, cue_id);
+
+    -- extract file IDs from recordings for gateway download URL injection
+    select array_agg((rec->>'file_id')::bigint)
+    into _file_ids
+    from jsonb_array_elements(_cue_with_recordings->'recordings') as rec;
+
+    return jsonb_build_object(
+        'cue', _cue_with_recordings,
+        'files', coalesce(to_jsonb(_file_ids), '[]'::jsonb)
+    );
+end;
+$$;
+
+grant execute on function api.get_cue_for_profile(bigint, bigint) to authenticated;
 
