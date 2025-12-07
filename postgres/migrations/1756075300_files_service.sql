@@ -39,6 +39,7 @@ create or replace function files.lookup_files(
 returns jsonb
 language sql
 stable
+security definer
 as $$
     select coalesce(
         jsonb_agg(
@@ -56,6 +57,8 @@ as $$
     where _file_ids is not null
       and f.file_id = any(_file_ids);
 $$;
+
+
 
 grant execute on function files.lookup_files(bigint[]) to file_service_user;
 
