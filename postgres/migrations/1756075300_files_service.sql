@@ -11,7 +11,7 @@ create domain files.mime_type as text
 
 -- domain: metadata key for file_metadata.key
 create domain files.metadata_key as text
-    check (value in ('name'));
+    check (value in ('name', 'duration'));
 
 -- table: generic file record for any shared file asset
 create table if not exists files.file (
