@@ -51,6 +51,9 @@ func InjectSignedFileURLs(ctx context.Context, cfg config.Config, body []byte) (
 		return body, nil
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if cfg.FileServiceAPIKey != "" {
+		req.Header.Set("X-File-Service-Api-Key", cfg.FileServiceAPIKey)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {

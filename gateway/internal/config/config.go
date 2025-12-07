@@ -23,6 +23,7 @@ type Config struct {
 	FileSignedURLPath       string
 	FilesFieldName          string
 	ProcessedFilesFieldName string
+	FileServiceAPIKey       string
 	// HTTP client
 	HTTPClientTimeoutSeconds int
 }
@@ -43,6 +44,7 @@ const (
 	EnvFileSignedURLPath       = "FILE_SIGNED_URL_PATH"
 	EnvFilesFieldName          = "FILES_FIELD_NAME"
 	EnvProcessedFilesFieldName = "PROCESSED_FILES_FIELD_NAME"
+	EnvFileServiceAPIKey       = "FILE_SERVICE_API_KEY"
 	// HTTP
 	EnvHTTPClientTimeoutSeconds = "HTTP_CLIENT_TIMEOUT_SECONDS"
 )
@@ -86,6 +88,7 @@ func Load() Config {
 		EnvFileSignedURLPath,
 		EnvFilesFieldName,
 		EnvProcessedFilesFieldName,
+		EnvFileServiceAPIKey,
 	}
 	requiredEnvVars, missingEnvVars := collectRequired(required)
 	if len(missingEnvVars) > 0 {
@@ -123,6 +126,7 @@ func Load() Config {
 		FileSignedURLPath:        optionalEnvVars[EnvFileSignedURLPath],
 		FilesFieldName:           optionalEnvVars[EnvFilesFieldName],
 		ProcessedFilesFieldName:  optionalEnvVars[EnvProcessedFilesFieldName],
+		FileServiceAPIKey:        requiredEnvVars[EnvFileServiceAPIKey],
 		HTTPClientTimeoutSeconds: httpTimeout,
 	}
 }
