@@ -7,6 +7,10 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    allowedHosts: [
+      'chatterboxtalk.com',
+      'www.chatterboxtalk.com',
+    ],
     watch: {
       usePolling: true,
     },
