@@ -5,6 +5,13 @@ api.chatterboxtalk.com {
     # Forward all API requests to gateway
     reverse_proxy gateway:8080 {
         header_up X-Request-ID {http.request.uuid}
+        
+        # Handle backend failures with proper error response
+        @backend_down status 502 503 504
+        handle_response @backend_down {
+            header Content-Type application/json
+            respond `{"error": "API service temporarily unavailable", "message": "The backend service is not responding. Please try again later.", "request_id": "{http.request.uuid}"}` 503
+        }
     }
 
     log {
