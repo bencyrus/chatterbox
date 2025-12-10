@@ -6,13 +6,12 @@ services:
     container_name: gateway
     restart: unless-stopped
     env_file:
-      - ./secrets/.env.gateway
+      - ./secrets/.env.gateway.local
     networks:
       - chattterbox-network
     depends_on:
       - postgrest
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "gateway", "service": "gateway"}]'
+
   postgres:
     build:
       context: .
@@ -22,7 +21,7 @@ services:
     ports:
       - "5432:5432"
     env_file:
-      - ./secrets/.env.postgres
+      - ./secrets/.env.postgres.local
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/backups:/backups
@@ -34,8 +33,7 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "postgres", "service": "postgres"}]'
+
   postgrest:
     image: postgrest/postgrest:latest
     container_name: postgrest
@@ -43,30 +41,25 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - ./secrets/.env.postgrest
-    # NO external ports - internal only for security
+      - ./secrets/.env.postgrest.local
     networks:
       - chattterbox-network
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      # Datadog log collection
-      - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
 
   caddy:
     image: caddy:alpine
     container_name: caddy
     restart: unless-stopped
     ports:
-      - "80:80" # HTTP (for redirect to HTTPS)
-      - "443:443" # HTTPS
+      - "80:80"
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/Caddyfile.local:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     env_file:
-      - ./secrets/.env.caddy
+      - ./secrets/.env.caddy.local
     networks:
       - chattterbox-network
     depends_on:
@@ -74,27 +67,6 @@ services:
       - files
       - swaggerui
       - web
-    labels:
-      # Datadog log collection
-      - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
-
-  datadog:
-    image: gcr.io/datadoghq/agent:7
-    container_name: dd-agent
-    restart: unless-stopped
-    profiles:
-      - observability
-    env_file:
-      - ./secrets/.env.datadog
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc/:/host/proc/:ro
-      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
-    networks:
-      - chattterbox-network
-    pid: host
 
   files:
     build:
@@ -105,11 +77,9 @@ services:
     ports:
       - "9090:9090"
     env_file:
-      - ./secrets/.env.files
+      - ./secrets/.env.files.local
     networks:
       - chattterbox-network
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "files", "service": "files"}]'
 
   worker:
     build:
@@ -118,7 +88,7 @@ services:
     container_name: worker
     restart: unless-stopped
     env_file:
-      - ./secrets/.env.worker
+      - ./secrets/.env.worker.local
     networks:
       - chattterbox-network
     depends_on:
@@ -126,8 +96,6 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
 
   swaggerui:
     image: swaggerapi/swagger-ui:latest
@@ -139,8 +107,6 @@ services:
       - chattterbox-network
     depends_on:
       - gateway
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "swaggerui", "service": "swaggerui"}]'
 
   web:
     build:
@@ -156,8 +122,17 @@ services:
       - /app/node_modules
     networks:
       - chattterbox-network
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "web", "service": "web"}]'
+  gcs:
+    image: fsouza/fake-gcs-server:latest
+    container_name: gcs
+    restart: unless-stopped
+    command: ["-scheme", "http", "-host", "0.0.0.0", "-port", "4443"]
+    ports:
+      - "4443:4443"
+    volumes:
+      - ./tmp/fake-gcs:/data
+    networks:
+      - chattterbox-network
 
 volumes:
   caddy_data:

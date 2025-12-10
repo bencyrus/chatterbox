@@ -30,22 +30,6 @@ type TaskPayload struct {
 	// and extract whatever IDs/data they need from it
 }
 
-// EmailPayload represents the payload structure for email tasks
-type EmailPayload struct {
-	MessageID   int64  `json:"message_id"`
-	FromAddress string `json:"from_address"`
-	ToAddress   string `json:"to_address"`
-	Subject     string `json:"subject"`
-	HTML        string `json:"html"`
-}
-
-// SMSPayload represents the payload structure for SMS tasks
-type SMSPayload struct {
-	MessageID int64  `json:"message_id"`
-	ToNumber  string `json:"to_number"`
-	Body      string `json:"body"`
-}
-
 // HandlerPayload represents the payload structure for success/error handlers
 type HandlerPayload struct {
 	OriginalPayload json.RawMessage `json:"original_payload,omitempty"`
@@ -64,12 +48,12 @@ type DBFunctionResult struct {
 // TaskResult represents the result of processing a task
 type TaskResult struct {
 	Success       bool
-	WorkerPayload interface{} // The result data from the service (email response, sms response, etc.)
-	Error         error       // Any error that occurred
+	WorkerPayload any   // The result data from the service (email response, sms response, etc.)
+	Error         error // Any error that occurred
 }
 
 // NewTaskSuccess creates a successful task result
-func NewTaskSuccess(workerPayload interface{}) *TaskResult {
+func NewTaskSuccess(workerPayload any) *TaskResult {
 	return &TaskResult{
 		Success:       true,
 		WorkerPayload: workerPayload,

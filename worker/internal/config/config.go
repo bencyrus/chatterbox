@@ -13,7 +13,9 @@ type Config struct {
 	DatabaseURL string
 
 	// Services
-	ResendAPIKey string
+	ResendAPIKey      string
+	FileServiceURL    string
+	FileServiceAPIKey string
 
 	// Worker settings
 	PollInterval time.Duration
@@ -26,9 +28,11 @@ type Config struct {
 
 func Load() Config {
 	cfg := Config{
-		DatabaseURL:  getEnv("DATABASE_URL", ""),
-		ResendAPIKey: getEnv("RESEND_API_KEY", ""),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		ResendAPIKey:      getEnv("RESEND_API_KEY", ""),
+		FileServiceURL:    getEnv("FILE_SERVICE_URL", ""),
+		FileServiceAPIKey: getEnv("FILE_SERVICE_API_KEY", ""),
+		LogLevel:          getEnv("LOG_LEVEL", "info"),
 	}
 
 	// Parse durations
@@ -54,6 +58,14 @@ func Load() Config {
 	// Validate required fields
 	if cfg.DatabaseURL == "" {
 		panic("DATABASE_URL is required")
+	}
+
+	if cfg.FileServiceURL == "" {
+		panic("FILE_SERVICE_URL is required")
+	}
+
+	if cfg.FileServiceAPIKey == "" {
+		panic("FILE_SERVICE_API_KEY is required")
 	}
 
 	return cfg

@@ -8,11 +8,10 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "${SCRIPT_DIR}/../.." && pwd)
 
 DEFAULT_MIGRATIONS_DIR="${REPO_ROOT}/postgres/migrations"
-DEFAULT_SECRETS_FILE="${REPO_ROOT}/secrets/.env.postgres"
 PSQL_BIN="psql"
 DB_URL=""
 MIGRATIONS_DIR="${DEFAULT_MIGRATIONS_DIR}"
-SECRETS_FILE="${DEFAULT_SECRETS_FILE}"
+SECRETS_FILE=""
 VERBOSE=0
 SINGLE_TX=1
 
@@ -36,17 +35,35 @@ MIG_ONLY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --per-file)
-      SINGLE_TX=0; shift;;
+      SINGLE_TX=0; shift ;;
     --verbose|-v)
-      VERBOSE=1; shift;;
+      VERBOSE=1; shift ;;
     --only)
-      if [[ $# -lt 2 ]]; then echo "--only requires a filename" >&2; exit 2; fi; MIG_ONLY="$2"; shift 2;;
+      if [[ $# -lt 2 ]]; then echo "--only requires a filename" >&2; exit 2; fi
+      MIG_ONLY="$2"; shift 2 ;;
     -h|--help)
-      usage; exit 0;;
+      usage; exit 0 ;;
     *)
-      echo "Unknown argument: $1" >&2; usage; exit 2;;
+      echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
+  shift
 done
+
+# Require MIGRATIONS_ENV to select the secrets file (e.g. local|prod).
+if [[ -z "${MIGRATIONS_ENV:-}" ]]; then
+  echo "Error: MIGRATIONS_ENV is required (e.g. MIGRATIONS_ENV=local or MIGRATIONS_ENV=prod)" >&2
+  exit 2
+fi
+
+case "${MIGRATIONS_ENV}" in
+  local)
+    SECRETS_FILE="${REPO_ROOT}/secrets/.env.postgres.local" ;;
+  prod)
+    SECRETS_FILE="${REPO_ROOT}/secrets/.env.postgres" ;;
+  *)
+    echo "Error: unknown MIGRATIONS_ENV='${MIGRATIONS_ENV}'. Expected 'local' or 'prod'." >&2
+    exit 2 ;;
+esac
 
 if [[ ! -d "${MIGRATIONS_DIR}" ]]; then
   echo "Error: migrations directory not found: ${MIGRATIONS_DIR}" >&2
@@ -60,6 +77,7 @@ fi
 
 [[ ${VERBOSE} -eq 1 ]] && echo "Loading secrets from ${SECRETS_FILE}"
 set -a
+# shellcheck source=/dev/null
 source "${SECRETS_FILE}"
 set +a
 
@@ -100,7 +118,8 @@ if [[ -n "${MIG_ONLY}" ]]; then
     rm -f "${MIG_LIST_FILE}"
     exit 2
   fi
-  printf '%s\n' "${CANDIDATE}" > "${MIG_LIST_FILE}"
+  printf '%s
+' "${CANDIDATE}" > "${MIG_LIST_FILE}"
 else
   if ! find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.sql' -print | sort > "${MIG_LIST_FILE}"; then
     echo "Failed to enumerate migration files" >&2
@@ -203,3 +222,4 @@ else
   [[ ${VERBOSE} -eq 1 ]] && echo "All migrations applied successfully."
 fi
 
+exit 0

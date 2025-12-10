@@ -59,6 +59,7 @@ Last verified: 2025-10-08
 - Basics first:
   - [SQL Style Guide](sql-style-guide.md)
   - [Queues and Worker](queues-and-worker.md)
+  - [Account Deletion](account-deletion.md)
   - [Comms](comms.md)
   - [OTP Login](otp-login.md)
   - [User Recording Uploads](user-recording-uploads.md)

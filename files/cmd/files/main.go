@@ -33,6 +33,7 @@ func main() {
 	mux.HandleFunc("/healthz", httpSrv.HealthzHandler)
 	mux.HandleFunc("/signed_download_url", httpSrv.SignedDownloadURLHandler)
 	mux.HandleFunc("/signed_upload_url", httpSrv.SignedUploadURLHandler)
+	mux.HandleFunc("/signed_delete_url", httpSrv.SignedDeleteURLHandler)
 
 	// Enforce FILE_SERVICE_API_KEY on all endpoints except /healthz.
 	protected := httpSrv.WithAPIKeyAuth(mux)

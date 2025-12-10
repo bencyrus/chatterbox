@@ -3,6 +3,7 @@ package httpserver
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/bencyrus/chatterbox/files/internal/config"
@@ -23,6 +24,29 @@ func NewServer(cfg config.Config, db *database.Client) *Server {
 		cfg: cfg,
 		db:  db,
 	}
+}
+
+// rewriteForEmulator rewrites a signed GCS URL to point at a local
+// GCS-compatible emulator when running in a local environment.
+// In non-local environments, or when no emulator URL is set,
+// the original URL is returned unchanged.
+func (s *Server) rewriteForEmulator(signedURL string) string {
+	if s.cfg.Environment != "local" || s.cfg.GCSEmulatorURL == "" {
+		return signedURL
+	}
+
+	base, err := url.Parse(s.cfg.GCSEmulatorURL)
+	if err != nil {
+		return signedURL
+	}
+	u, err := url.Parse(signedURL)
+	if err != nil {
+		return signedURL
+	}
+
+	u.Scheme = base.Scheme
+	u.Host = base.Host
+	return u.String()
 }
 
 // WithAPIKeyAuth wraps an http.Handler and enforces the FILE_SERVICE_API_KEY
@@ -130,7 +154,7 @@ func (s *Server) SignedDownloadURLHandler(w http.ResponseWriter, r *http.Request
 		}
 		out = append(out, map[string]any{
 			"file_id": m.FileID,
-			"url":     url,
+			"url":     s.rewriteForEmulator(url),
 		})
 	}
 
@@ -148,6 +172,87 @@ func (s *Server) SignedDownloadURLHandler(w http.ResponseWriter, r *http.Request
 	enc := json.NewEncoder(w)
 	if err := enc.Encode(out); err != nil {
 		logger.Error(ctx, "failed to encode response", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}
+}
+
+// SignedDeleteURLHandler processes signed delete URL requests for files.
+func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if r.Method != http.MethodPost {
+		logger.Warn(ctx, "invalid method for signed_delete_url endpoint", logger.Fields{
+			"method": r.Method,
+		})
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		logger.Error(ctx, "failed to decode signed_delete_url request body", err)
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	bucketRaw, ok := body["bucket"]
+	if !ok {
+		logger.Warn(ctx, "missing bucket field in signed_delete_url request")
+		http.Error(w, "missing bucket", http.StatusBadRequest)
+		return
+	}
+	objectKeyRaw, ok := body["object_key"]
+	if !ok {
+		logger.Warn(ctx, "missing object_key field in signed_delete_url request")
+		http.Error(w, "missing object_key", http.StatusBadRequest)
+		return
+	}
+
+	bucket, ok := bucketRaw.(string)
+	if !ok || bucket == "" {
+		logger.Warn(ctx, "bucket is not a non-empty string in signed_delete_url request")
+		http.Error(w, "invalid bucket", http.StatusBadRequest)
+		return
+	}
+	objectKey, ok := objectKeyRaw.(string)
+	if !ok || objectKey == "" {
+		logger.Warn(ctx, "object_key is not a non-empty string in signed_delete_url request")
+		http.Error(w, "invalid object_key", http.StatusBadRequest)
+		return
+	}
+
+	// Optional: validate that the requested bucket matches configured bucket.
+	if bucket != s.cfg.GCSBucket {
+		logger.Warn(ctx, "signed_delete_url bucket mismatch", logger.Fields{
+			"requested_bucket":  bucket,
+			"configured_bucket": s.cfg.GCSBucket,
+		})
+		http.Error(w, "invalid bucket", http.StatusBadRequest)
+		return
+	}
+
+	ttl := time.Duration(s.cfg.GCSSignedURLTTLSeconds) * time.Second
+	url, err := gcs.SignedDeleteURL(s.cfg.GCSBucket, objectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
+	if err != nil {
+		logger.Error(ctx, "failed to generate signed delete URL", err, logger.Fields{
+			"object_key": objectKey,
+		})
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info(ctx, "signed delete URL generated successfully", logger.Fields{
+		"object_key": objectKey,
+	})
+
+	response := map[string]any{
+		"url": s.rewriteForEmulator(url),
+	}
+
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(response); err != nil {
+		logger.Error(ctx, "failed to encode signed_delete_url response", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }
@@ -213,7 +318,7 @@ func (s *Server) SignedUploadURLHandler(w http.ResponseWriter, r *http.Request) 
 	})
 
 	response := map[string]any{
-		"upload_url": url,
+		"upload_url": s.rewriteForEmulator(url),
 	}
 
 	enc := json.NewEncoder(w)

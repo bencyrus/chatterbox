@@ -1,0 +1,44 @@
+:80 {
+    # Simple local dev entrypoint on http://localhost
+    header X-Request-ID {http.request.uuid}
+
+    # API (gateway)
+    handle_path /api/* {
+        reverse_proxy gateway:8080 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # OpenAPI spec via gateway
+    handle /openapi.json {
+        reverse_proxy gateway:8080 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Swagger UI
+    handle_path /swagger/* {
+        reverse_proxy swaggerui:8080 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Files service (if exposed directly)
+    handle_path /files/* {
+        reverse_proxy files:9090 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Fallback: marketing web app
+    handle {
+        reverse_proxy web:5173 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

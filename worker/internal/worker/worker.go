@@ -12,6 +12,7 @@ import (
 	"github.com/bencyrus/chatterbox/worker/internal/database"
 	"github.com/bencyrus/chatterbox/worker/internal/processing"
 	"github.com/bencyrus/chatterbox/worker/internal/services/email"
+	"github.com/bencyrus/chatterbox/worker/internal/services/files"
 	"github.com/bencyrus/chatterbox/worker/internal/services/sms"
 	"github.com/bencyrus/chatterbox/worker/internal/types"
 )
@@ -21,6 +22,7 @@ type Worker struct {
 	db       *database.Client
 	emailSvc *email.Service
 	smsSvc   *sms.Service
+	filesSvc *files.Service
 
 	dispatcher *processing.Dispatcher
 	handlers   *processing.HandlerInvoker
@@ -36,18 +38,21 @@ func NewWorker(cfg config.Config) (*Worker, error) {
 	// Initialize services
 	emailSvc := email.NewService(cfg.ResendAPIKey)
 	smsSvc := sms.NewService()
+	filesSvc := files.NewService(cfg.FileServiceURL, cfg.FileServiceAPIKey)
 	// Build processing stack
 	handlers := processing.NewHandlerInvoker(db)
 	dispatcher := processing.NewDispatcher()
 	dispatcher.Register(processing.NewDBFunctionProcessor(db))
 	dispatcher.Register(processing.NewEmailProcessor(handlers, emailSvc))
 	dispatcher.Register(processing.NewSMSProcessor(handlers, smsSvc))
+	dispatcher.Register(processing.NewFileDeleteProcessor(handlers, filesSvc))
 
 	return &Worker{
 		cfg:        cfg,
 		db:         db,
 		emailSvc:   emailSvc,
 		smsSvc:     smsSvc,
+		filesSvc:   filesSvc,
 		dispatcher: dispatcher,
 		handlers:   handlers,
 	}, nil

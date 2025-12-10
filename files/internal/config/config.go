@@ -18,6 +18,15 @@ type Config struct {
 	GCSBucket              string
 	GCSSignedURLTTLSeconds int
 
+	// High-level environment mode: e.g. "local" or "prod".
+	// We only talk to the GCS emulator when this is explicitly "local".
+	Environment string
+
+	// Optional: base URL of a GCS-compatible emulator for local development.
+	// When set, signed URLs will have their host/scheme rewritten to point
+	// at this emulator instead of storage.googleapis.com.
+	GCSEmulatorURL string
+
 	// Internal API key used to authenticate gateway calls
 	FileServiceAPIKey string
 }
@@ -34,6 +43,9 @@ const (
 	EnvGCSSignedURLTTL = "GCS_CHATTERBOX_SIGNED_URL_TTL_SECONDS"
 
 	EnvFileServiceAPIKey = "FILE_SERVICE_API_KEY"
+
+	EnvEnvironment    = "FILES_ENVIRONMENT"
+	EnvGCSEmulatorURL = "GCS_EMULATOR_URL"
 )
 
 func Load() Config {
@@ -76,6 +88,13 @@ func Load() Config {
 		panic("FILE_SERVICE_API_KEY is required for files service")
 	}
 
+	environment := strings.TrimSpace(os.Getenv(EnvEnvironment))
+	if environment == "" {
+		environment = "prod"
+	}
+
+	emulatorURL := strings.TrimSpace(os.Getenv(EnvGCSEmulatorURL))
+
 	return Config{
 		Port:                   port,
 		DatabaseURL:            dbURL,
@@ -84,5 +103,7 @@ func Load() Config {
 		GCSBucket:              bucket,
 		GCSSignedURLTTLSeconds: ttlSeconds,
 		FileServiceAPIKey:      apiKey,
+		Environment:            environment,
+		GCSEmulatorURL:         emulatorURL,
 	}
 }
