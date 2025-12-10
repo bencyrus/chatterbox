@@ -35,18 +35,31 @@ MIG_ONLY=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --per-file)
-      SINGLE_TX=0; shift ;;
+      SINGLE_TX=0
+      shift
+      ;;
     --verbose|-v)
-      VERBOSE=1; shift ;;
+      VERBOSE=1
+      shift
+      ;;
     --only)
-      if [[ $# -lt 2 ]]; then echo "--only requires a filename" >&2; exit 2; fi
-      MIG_ONLY="$2"; shift 2 ;;
+      if [[ $# -lt 2 ]]; then
+        echo "--only requires a filename" >&2
+        exit 2
+      fi
+      MIG_ONLY="$2"
+      shift 2
+      ;;
     -h|--help)
-      usage; exit 0 ;;
+      usage
+      exit 0
+      ;;
     *)
-      echo "Unknown argument: $1" >&2; usage; exit 2 ;;
+      echo "Unknown argument: $1" >&2
+      usage
+      exit 2
+      ;;
   esac
-  shift
 done
 
 # Require MIGRATIONS_ENV to select the secrets file (e.g. local|prod).
