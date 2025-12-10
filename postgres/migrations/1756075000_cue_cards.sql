@@ -53,16 +53,59 @@ create domain languages.language_code as text
 create schema if not exists cues;
 grant usage on schema cues to authenticated;
 
-create domain cues.cue_stage as text
+create domain cues.stage as text
     check (value in ('draft', 'published', 'archived'));
 
 -- table: root cue card (language-independent metadata)
 create table if not exists cues.cue (
     cue_id bigserial primary key,
-    stage cues.cue_stage not null default 'draft',
     created_at timestamp with time zone not null default now(),
     created_by bigint not null references accounts.account(account_id) on delete cascade
 );
+
+-- table: cue stage transitions (tracks all stage changes)
+create table if not exists cues.cue_stage (
+    cue_stage_id bigserial primary key,
+    cue_id bigint not null references cues.cue(cue_id) on delete cascade,
+    stage cues.stage not null,
+    created_at timestamp with time zone not null default now(),
+    created_by bigint not null references accounts.account(account_id) on delete cascade
+);
+
+
+-- function: get current stage for a cue
+create or replace function cues.current_stage(_cue_id bigint)
+returns cues.stage
+language sql
+stable
+as $$
+    select stage
+    from cues.cue_stage
+    where cue_id = _cue_id
+    order by created_at desc, cue_stage_id desc
+    limit 1;
+$$;
+
+-- function: get full stage history for a cue
+create or replace function cues.stage_history(_cue_id bigint)
+returns jsonb
+language sql
+stable
+as $$
+    select coalesce(
+        jsonb_agg(
+            jsonb_build_object(
+                'stage', cs.stage,
+                'created_at', cs.created_at,
+                'created_by', cs.created_by
+            )
+            order by cs.created_at desc, cs.cue_stage_id desc
+        ),
+        '[]'::jsonb
+    )
+    from cues.cue_stage cs
+    where cs.cue_id = _cue_id;
+$$;
 
 -- table: localized cue content for a cue (one row per language)
 create table if not exists cues.cue_content (
@@ -85,6 +128,7 @@ language sql
 stable
 as $$
     select to_jsonb(_cue)
+           || jsonb_build_object('stage', cues.current_stage(_cue.cue_id))
            || jsonb_build_object('content', to_jsonb(_content));
 $$;
 
@@ -186,7 +230,7 @@ create or replace function cues.create_cue(
     _title text,
     _details text,
     _language_code languages.language_code,
-    _stage cues.cue_stage,
+    _stage cues.stage,
     out validation_failure_message text,
     out result jsonb
 )
@@ -200,7 +244,7 @@ declare
     _normalized_title text := btrim(_title);
     _normalized_details text := btrim(_details);
     _normalized_language_code languages.language_code := btrim(_language_code);
-    _normalized_stage cues.cue_stage := btrim(_stage);
+    _normalized_stage cues.stage := btrim(_stage);
 begin
     if _created_by is null then
         validation_failure_message := 'created_by_missing';
@@ -227,10 +271,14 @@ begin
         return;
     end if;
 
-    insert into cues.cue (stage, created_by)
-    values (_normalized_stage, _created_by)
+    insert into cues.cue (created_by)
+    values (_created_by)
     returning *
     into _created_cue;
+
+    -- record initial stage
+    insert into cues.cue_stage (cue_id, stage, created_by)
+    values (_created_cue.cue_id, _normalized_stage, _created_by);
 
     insert into cues.cue_content (cue_id, title, details, language_code)
     values (_created_cue.cue_id, _normalized_title, _normalized_details, _normalized_language_code)
@@ -280,7 +328,8 @@ grant execute on function api.create_cue(text, text, languages.language_code) to
 
 create or replace function cues.update_cue_stage(
     _cue_id bigint,
-    _stage cues.cue_stage,
+    _stage cues.stage,
+    _created_by bigint,
     out validation_failure_message text,
     out cue cues.cue
 )
@@ -299,16 +348,25 @@ begin
         return;
     end if;
 
-    update cues.cue c
-    set stage = _stage
-    where c.cue_id = _cue_id
-    returning *
-    into cue;
+    if _created_by is null then
+        validation_failure_message := 'created_by_missing';
+        return;
+    end if;
+
+    -- verify cue exists
+    select *
+    into cue
+    from cues.cue c
+    where c.cue_id = _cue_id;
 
     if not found then
         validation_failure_message := 'cue_not_found';
         return;
     end if;
+
+    -- insert new stage record
+    insert into cues.cue_stage (cue_id, stage, created_by)
+    values (_cue_id, _stage, _created_by);
 
     return;
 end;
@@ -316,22 +374,23 @@ $$;
 
 create or replace function api.update_cue_stage(
     cue_id bigint,
-    stage cues.cue_stage
+    stage cues.stage
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
+    _authenticated_account_id bigint := auth.jwt_account_id();
     _update_cue_stage_result record; -- OUT: validation_failure_message text, cue cues.cue
 begin
-    if not auth.is_creator_account(auth.jwt_account_id()) then
+    if not auth.is_creator_account(_authenticated_account_id) then
         raise exception 'Update Cue Stage Failed'
             using detail = 'Unauthorized',
                   hint = 'unauthorized_to_update_cue_stage';
     end if;
 
-    _update_cue_stage_result := cues.update_cue_stage(cue_id, stage);
+    _update_cue_stage_result := cues.update_cue_stage(cue_id, stage, _authenticated_account_id);
     if _update_cue_stage_result.validation_failure_message is not null then
         raise exception 'Update Cue Stage Failed'
             using detail = 'Invalid Input',
@@ -342,7 +401,7 @@ begin
 end;
 $$;
 
-grant execute on function api.update_cue_stage(bigint, cues.cue_stage) to authenticated;
+grant execute on function api.update_cue_stage(bigint, cues.stage) to authenticated;
 
 -- function: select and record a weighted-random batch of cues for a profile
 create or replace function cues.shuffle_cues(
@@ -384,7 +443,7 @@ begin
         left join learning.cue_seen cs
             on cs.cue_content_id = cc.cue_content_id
            and cs.profile_id = _profile_id
-        where c.stage = 'published'
+        where cues.current_stage(c.cue_id) = 'published'
         group by cc.cue_id, cc.cue_content_id
         order by weight
         limit _normalized_count
@@ -575,7 +634,7 @@ begin
         join cues.cue c
             on c.cue_id = cc.cue_id
         where cs.profile_id = _profile_id
-          and c.stage = 'published'
+          and cues.current_stage(c.cue_id) = 'published'
     )
     select
         coalesce(

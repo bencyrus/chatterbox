@@ -100,6 +100,7 @@ as $$
 declare
     _cue cues.cue;
     _cue_content cues.cue_content;
+    _current_stage cues.stage;
 begin
     select *
     into _cue
@@ -110,6 +111,9 @@ begin
         return null;
     end if;
 
+    -- get current stage from history
+    _current_stage := cues.current_stage(_cue_id);
+
     if _include_content and _language_code is not null then
         select *
         into _cue_content
@@ -118,7 +122,9 @@ begin
           and language_code = _language_code;
     end if;
 
-    return to_jsonb(_cue) || jsonb_build_object('content', coalesce(to_jsonb(_cue_content), 'null'::jsonb));
+    return to_jsonb(_cue) 
+           || jsonb_build_object('stage', _current_stage)
+           || jsonb_build_object('content', coalesce(to_jsonb(_cue_content), 'null'::jsonb));
 end;
 $$;
 

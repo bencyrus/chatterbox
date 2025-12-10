@@ -126,11 +126,15 @@ services:
     image: fsouza/fake-gcs-server:latest
     container_name: gcs
     restart: unless-stopped
-    command: ["-scheme", "http", "-host", "0.0.0.0", "-port", "4443"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mkdir -p /data/local-bucket
+        exec /bin/fake-gcs-server -scheme http -host 0.0.0.0 -port 4443 -backend filesystem -data /data -public-host localhost:4443
     ports:
       - "4443:4443"
     volumes:
-      - ./tmp/fake-gcs:/data
+      - gcs_data:/data
     networks:
       - chattterbox-network
 
@@ -138,6 +142,7 @@ volumes:
   caddy_data:
   caddy_config:
   postgres_data:
+  gcs_data:
 
 networks:
   chattterbox-network:
