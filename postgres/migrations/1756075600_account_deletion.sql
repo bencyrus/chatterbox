@@ -1115,7 +1115,7 @@ grant execute on function accounts.kickoff_account_deletion(bigint, timestamp wi
 -- =============================================================================
 
 create or replace function api.request_account_deletion(
-    _account_id bigint
+    account_id bigint
 )
 returns jsonb
 language plpgsql
@@ -1125,20 +1125,20 @@ declare
     _authenticated_account_id bigint := auth.jwt_account_id();
     _kickoff_validation_failure_message text;
 begin
-    if _account_id is null then
+    if account_id is null then
         raise exception 'Request Account Deletion Failed'
             using detail = 'Invalid Request Payload',
                   hint = 'missing_account_id';
     end if;
 
-    if _account_id != _authenticated_account_id then
+    if account_id != _authenticated_account_id then
         raise exception 'Request Account Deletion Failed'
             using detail = 'Unauthorized',
                   hint = 'unauthorized_to_request_account_deletion';
     end if;
 
     select accounts.kickoff_account_deletion(
-        _account_id,
+        account_id,
         now()
     )
     into strict _kickoff_validation_failure_message;

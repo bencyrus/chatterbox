@@ -30,6 +30,14 @@
         }
     }
 
+    # Magic login links: local fallback page so they don't hit the web
+    # frontend (Vite). This mirrors the production Caddy behaviour.
+    @magicLogin path /auth/magic*
+    handle @magicLogin {
+        header Content-Type text/html; charset=utf-8
+        respond `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chatterbox</title></head><body><p>You can close this tab and return to the Chatterbox app.</p></body></html>` 200
+    }
+
     # Fallback: marketing web app
     handle {
         reverse_proxy web:5173 {

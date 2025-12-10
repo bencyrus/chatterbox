@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import PrivacyPage from './pages/PrivacyPage'
+import RequestAccountRestorePage from './pages/RequestAccountRestorePage'
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/request-account-restore" element={<RequestAccountRestorePage />} />
       </Routes>
     </Router>
   )

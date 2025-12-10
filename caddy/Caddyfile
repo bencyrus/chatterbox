@@ -97,6 +97,16 @@ EOF
 EOF
     }
 
+    # Magic login links: handled directly by Caddy so they never hit the web
+    # frontend (Vite). The app consumes the link via Universal Links; if the
+    # user ends up in a browser, show a simple fallback page instead of the
+    # marketing site.
+    @magicLogin path /auth/magic*
+    handle @magicLogin {
+        header Content-Type text/html; charset=utf-8
+        respond `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chatterbox</title></head><body><p>You can close this tab and return to the Chatterbox app.</p></body></html>` 200
+    }
+
     # Serve the marketing website
     reverse_proxy web:5173 {
         header_up X-Request-ID {http.request.uuid}
