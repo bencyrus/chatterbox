@@ -47,7 +47,7 @@ files.chatterboxtalk.com {
     header X-Request-ID {http.request.uuid}
 
     # Proxy all requests to the files service
-    reverse_proxy files:8080 {
+    reverse_proxy files:9090 {
         header_up X-Request-ID {http.request.uuid}
     }
 
