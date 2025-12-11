@@ -5,11 +5,12 @@ function MagicLinkPage() {
   const searchParams = new URLSearchParams(location.search)
   const token = searchParams.get('token') ?? ''
 
-  // Use the same universal link URL as the email, so tapping the button
-  // can re-attempt to open the app on iOS when association is working.
+  // Prefer a custom URL scheme for the manual "Open app" button so that
+  // tapping it from Safari can jump directly into the app. The automatic
+  // flow still uses the HTTPS universal link from the email/SMS.
   const appUrl = token
-    ? `https://chatterboxtalk.com/auth/magic?token=${encodeURIComponent(token)}`
-    : `https://chatterboxtalk.com/auth/magic`
+    ? `chatterbox://auth/magic?token=${encodeURIComponent(token)}`
+    : `chatterbox://auth/magic`
 
   const handleOpenApp = () => {
     window.location.href = appUrl
