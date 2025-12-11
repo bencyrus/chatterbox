@@ -196,36 +196,47 @@ func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	bucketRaw, ok := body["bucket"]
+	fileIDRaw, ok := body["file_id"]
 	if !ok {
-		logger.Warn(ctx, "missing bucket field in signed_delete_url request")
-		http.Error(w, "missing bucket", http.StatusBadRequest)
-		return
-	}
-	objectKeyRaw, ok := body["object_key"]
-	if !ok {
-		logger.Warn(ctx, "missing object_key field in signed_delete_url request")
-		http.Error(w, "missing object_key", http.StatusBadRequest)
+		logger.Warn(ctx, "missing file_id field in signed_delete_url request")
+		http.Error(w, "missing file_id", http.StatusBadRequest)
 		return
 	}
 
-	bucket, ok := bucketRaw.(string)
-	if !ok || bucket == "" {
-		logger.Warn(ctx, "bucket is not a non-empty string in signed_delete_url request")
-		http.Error(w, "invalid bucket", http.StatusBadRequest)
+	// JSON numbers decode as float64 in Go
+	fileIDFloat, ok := fileIDRaw.(float64)
+	if !ok {
+		logger.Warn(ctx, "file_id is not a number in signed_delete_url request")
+		http.Error(w, "invalid file_id", http.StatusBadRequest)
 		return
 	}
-	objectKey, ok := objectKeyRaw.(string)
-	if !ok || objectKey == "" {
-		logger.Warn(ctx, "object_key is not a non-empty string in signed_delete_url request")
-		http.Error(w, "invalid object_key", http.StatusBadRequest)
+	fileID := int64(fileIDFloat)
+
+	// Look up file metadata (bucket, object key) by ID so callers
+	// don't need to know storage details.
+	metadata, err := s.db.LookupFiles(ctx, []int64{fileID})
+	if err != nil {
+		logger.Error(ctx, "failed to lookup file for signed_delete_url", err, logger.Fields{
+			"file_id": fileID,
+		})
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(metadata) == 0 {
+		logger.Warn(ctx, "file not found for signed_delete_url", logger.Fields{
+			"file_id": fileID,
+		})
+		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
 
-	// Optional: validate that the requested bucket matches configured bucket.
-	if bucket != s.cfg.GCSBucket {
+	m := metadata[0]
+
+	// Optional: validate that the file's bucket matches configured bucket.
+	if m.Bucket != s.cfg.GCSBucket {
 		logger.Warn(ctx, "signed_delete_url bucket mismatch", logger.Fields{
-			"requested_bucket":  bucket,
+			"file_id":           fileID,
+			"file_bucket":       m.Bucket,
 			"configured_bucket": s.cfg.GCSBucket,
 		})
 		http.Error(w, "invalid bucket", http.StatusBadRequest)
@@ -233,17 +244,19 @@ func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ttl := time.Duration(s.cfg.GCSSignedURLTTLSeconds) * time.Second
-	url, err := gcs.SignedDeleteURL(s.cfg.GCSBucket, objectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
+	url, err := gcs.SignedDeleteURL(m.Bucket, m.ObjectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
 	if err != nil {
 		logger.Error(ctx, "failed to generate signed delete URL", err, logger.Fields{
-			"object_key": objectKey,
+			"file_id":    fileID,
+			"object_key": m.ObjectKey,
 		})
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	logger.Info(ctx, "signed delete URL generated successfully", logger.Fields{
-		"object_key": objectKey,
+		"file_id":    fileID,
+		"object_key": m.ObjectKey,
 	})
 
 	response := map[string]any{

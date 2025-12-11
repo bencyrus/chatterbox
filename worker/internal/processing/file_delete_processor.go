@@ -45,12 +45,10 @@ func (p *FileDeleteProcessor) Process(ctx context.Context, task *types.Task) *ty
 	}
 
 	logger.Info(ctx, "processing file_delete task", logger.Fields{
-		"file_id":    filePayload.FileID,
-		"bucket":     filePayload.Bucket,
-		"object_key": filePayload.ObjectKey,
+		"file_id": filePayload.FileID,
 	})
 
-	signedURL, err := p.service.GetSignedDeleteURL(ctx, filePayload.Bucket, filePayload.ObjectKey, filePayload.FileID)
+	signedURL, err := p.service.GetSignedDeleteURL(ctx, filePayload.FileID)
 	if err != nil {
 		return types.NewTaskFailure(fmt.Errorf("failed to get signed delete URL: %w", err))
 	}
@@ -61,8 +59,6 @@ func (p *FileDeleteProcessor) Process(ctx context.Context, task *types.Task) *ty
 
 	result := &types.FileDeleteResult{
 		FileID:          filePayload.FileID,
-		Bucket:          filePayload.Bucket,
-		ObjectKey:       filePayload.ObjectKey,
 		DeleteStatus:    "deleted",
 		SignedDeleteURL: signedURL,
 	}

@@ -33,10 +33,11 @@ func NewService(baseURL, apiKey string) *Service {
 	}
 }
 
-// GetSignedDeleteURL requests a signed DELETE URL for a specific object from
-// the files service. The fileID is used for logging and observability but
-// is not required by the signer itself.
-func (s *Service) GetSignedDeleteURL(ctx context.Context, bucket, objectKey string, fileID int64) (string, error) {
+// GetSignedDeleteURL requests a signed DELETE URL for a specific file from
+// the files service. The files service is responsible for resolving storage
+// details (bucket, object key) from the file ID so the worker does not need
+// to know about them.
+func (s *Service) GetSignedDeleteURL(ctx context.Context, fileID int64) (string, error) {
 	if s.baseURL == "" {
 		return "", fmt.Errorf("files service baseURL is empty")
 	}
@@ -45,15 +46,11 @@ func (s *Service) GetSignedDeleteURL(ctx context.Context, bucket, objectKey stri
 	}
 
 	logger.Info(ctx, "requesting signed delete URL from files service", logger.Fields{
-		"bucket":    bucket,
-		"objectKey": objectKey,
-		"file_id":   fileID,
+		"file_id": fileID,
 	})
 
 	body := map[string]any{
-		"bucket":     bucket,
-		"object_key": objectKey,
-		"file_id":    fileID,
+		"file_id": fileID,
 	}
 
 	reqBody, err := json.Marshal(body)

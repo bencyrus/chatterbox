@@ -15,6 +15,9 @@ alter domain queues.task_type
     add constraint task_type_allowed_values
     check (value in ('db_function', 'email', 'sms', 'file_delete'));
 
+grant usage on schema accounts to worker_service_user;
+grant usage on schema files to worker_service_user;
+grant usage on schema learning to worker_service_user;
 
 -- =============================================================================
 -- file deletion domain: generic per-file deletion process
@@ -150,7 +153,9 @@ begin
     select f.*
     into _file_record
     from files.file f
-    where f.file_id = _file_id;
+    join files.file_metadata fm using (file_id)
+    where f.file_id = _file_id
+      and fm.key != 'deleted';
 
     if not found then
         return jsonb_build_object(
@@ -162,9 +167,7 @@ begin
     return jsonb_build_object(
         'success', true,
         'payload', jsonb_build_object(
-            'file_id', _file_record.file_id,
-            'bucket', _file_record.bucket,
-            'object_key', _file_record.object_key
+            'file_id', _file_record.file_id
         )
     );
 end;
@@ -878,7 +881,7 @@ declare
     _has_success boolean;
     _num_failures integer;
     _num_scheduled integer;
-    _max_attempts integer := 3;
+    _max_attempts integer := 1; -- Do not retry
     _base_delay_seconds integer := 10;
     _next_check_at timestamptz;
     _files_are_deleted boolean;

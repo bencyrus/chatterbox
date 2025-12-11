@@ -42,6 +42,21 @@ docs.chatterboxtalk.com {
     }
 }
 
+files.chatterboxtalk.com {
+    # Add a unique UUID per request to the response headers
+    header X-Request-ID {http.request.uuid}
+
+    # Proxy all requests to the files service
+    reverse_proxy files:8080 {
+        header_up X-Request-ID {http.request.uuid}
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
 chatterboxtalk.com {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
