@@ -27,9 +27,12 @@ func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now tim
 		return 0, false
 	}
 
+	// Parse WITHOUT validation to extract exp claim even from expired tokens.
+	// We need to check expiry ourselves to determine if refresh is needed,
+	// including for tokens that have already expired but have a valid refresh token.
 	token, err := jwt.ParseWithClaims(tokenStr, jwt.MapClaims{}, func(token *jwt.Token) (any, error) {
 		return []byte(cfg.JWTSecret), nil
-	}, jwt.WithValidMethods([]string{"HS256"}))
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithoutClaimsValidation())
 	if err != nil {
 		return 0, false
 	}
@@ -48,12 +51,15 @@ func AccessTokenSecondsRemaining(cfg config.Config, headers http.Header, now tim
 }
 
 // ShouldRefreshAccessToken returns true when the access token is present and
-// will expire within cfg.RefreshThresholdSeconds.
+// will expire within cfg.RefreshThresholdSeconds, or has already expired.
+// This enables both proactive refresh (before expiry) and reactive refresh
+// (after expiry with valid refresh token).
 func ShouldRefreshAccessToken(cfg config.Config, headers http.Header, now time.Time) bool {
 	remaining, ok := AccessTokenSecondsRemaining(cfg, headers, now)
 	if !ok {
 		return false
 	}
+	// Refresh if remaining time is within threshold (including negative for expired tokens)
 	return remaining <= cfg.RefreshThresholdSeconds
 }
 
