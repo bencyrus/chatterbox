@@ -112,7 +112,7 @@ begin
     if _identifier_type_result.identifier_type = 'email' then
         _rendered_email := comms.render_email_template(
             'magic_login_link_email',
-            jsonb_build_object('url', _magic_link_url, 'token_expiry_minutes', _token_expiry_minutes)
+            jsonb_build_object('url', _magic_link_url, 'minutes', _token_expiry_minutes)
         );
 
         if _rendered_email.subject is null or _rendered_email.body is null then
@@ -137,7 +137,7 @@ begin
     else
         _rendered_sms_body := comms.render_sms_template(
             'magic_login_link_sms',
-            jsonb_build_object('url', _magic_link_url, 'token_expiry_minutes', _token_expiry_minutes)
+            jsonb_build_object('url', _magic_link_url, 'minutes', _token_expiry_minutes)
         );
 
         if _rendered_sms_body is null then
