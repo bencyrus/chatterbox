@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.*.example
+chatterbox-upload-key.jks
 
 # Postgres backups
 postgres/backups/*
