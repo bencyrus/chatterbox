@@ -56,7 +56,9 @@ Last verified: 2025-10-08
 
 ### See also
 
-- Basics first:
+- Design patterns:
+  - [Patterns](../patterns/README.md) (facts-logic-effects, supervisors)
+- Postgres docs:
   - [SQL Style Guide](sql-style-guide.md)
   - [Queues and Worker](queues-and-worker.md)
   - [Account Deletion](account-deletion.md)
@@ -65,4 +67,4 @@ Last verified: 2025-10-08
   - [User Recording Uploads](user-recording-uploads.md)
   - [Migrations and Secrets](migrations-and-secrets.md)
 - Security/grants:
-  - See: [Security and Grants](security.md)
+  - [Security and Grants](security.md)

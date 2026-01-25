@@ -1,8 +1,9 @@
 # Chatterbox Documentation Map
 
-- [Concepts](docs/concepts/README.md)
+- [Patterns](docs/patterns/README.md)
 
-  - [Why the Supervisor Pattern](docs/concepts/why-supervisor.md)
+  - [Facts, Logic, Effects](docs/patterns/facts-logic-effects.md)
+  - [Supervisors](docs/patterns/supervisors.md)
 
 - [Postgres](docs/postgres/README.md)
 

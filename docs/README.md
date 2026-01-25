@@ -21,9 +21,10 @@ Last verified: 2025-10-08
 
 ### Documentation map
 
-- [Concepts](concepts/README.md)
+- [Patterns](patterns/README.md)
 
-  - [Why the Supervisor Pattern](concepts/why-supervisor.md)
+  - [Facts, Logic, Effects](patterns/facts-logic-effects.md)
+  - [Supervisors](patterns/supervisors.md)
 
 - [Postgres](postgres/README.md)
 
@@ -65,7 +66,7 @@ Last verified: 2025-10-08
 
 ### Start here
 
-- Concepts: [`docs/concepts/README.md`](concepts/README.md)
+- Patterns: [`docs/patterns/README.md`](patterns/README.md)
 - Postgres: [`docs/postgres/README.md`](postgres/README.md)
 - Gateway: [`docs/gateway/README.md`](gateway/README.md)
 - Worker: [`docs/worker/README.md`](worker/README.md)

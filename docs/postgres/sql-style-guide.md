@@ -43,15 +43,9 @@ Last verified: 2025-10-08
 - Avoid calling functions with side effects in `declare`; perform side effects in the `begin...end` block. Pure getters may be called in `declare`.
 - Rely on getters to normalize inputs; avoid pre-normalizing in callers when getters already handle it.
 
-### Patterns
-
-- Consolidated facts helper (optional): For complex supervisors, consider a single read-only helper that aggregates the latest facts into a compact record (e.g., counts, has_terminal). Keep it idempotent; make decisions in the supervisor and perform outputs there (insert facts, enqueue tasks).
-
-### Further reading
-
-- For architecture, worker contracts, and payload conventions see `docs/postgres/queues-and-worker.md`.
-- For roles, grants, and security conventions see `docs/postgres/security.md`.
-
 ### See also
 
+- Design patterns: [Patterns](../patterns/README.md) (facts-logic-effects, supervisors)
+- Queues and worker: [Queues and Worker](queues-and-worker.md)
+- Security and grants: [Security](security.md)
 - Back to Postgres: [Postgres Index](README.md)
