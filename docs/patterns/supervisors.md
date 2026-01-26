@@ -234,6 +234,55 @@ perform 1 from task where id = _id for update;  -- too late, facts already gathe
 
 In the wrong order, you might read facts, then block on the lock, then proceed with stale facts after the other transaction has changed the world.
 
+### Payload design
+
+Keep supervisor payloads minimal. A supervisor should receive just enough information to identify the work (typically a single task ID) and look up everything else inside the function.
+
+**Why minimal payloads:**
+
+1. **Prevents stale data**: If you pass file IDs in the payload, and a file is added or removed before the supervisor runs, the payload is wrong. Looking up file IDs inside means you always see the current state.
+
+2. **Simplifies re-running**: When debugging, you can re-run a supervisor with just `{"task_id": 123}`. You don't need to reconstruct a complex payload.
+
+3. **Reduces coupling**: The caller doesn't need to know what data the supervisor needs internally. It just provides the root identifier.
+
+```sql
+-- GOOD: minimal payload, look up details inside
+create or replace function accounts.account_deletion_supervisor(
+    payload jsonb
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+    _account_id bigint := (payload->>'account_id')::bigint;
+    _file_ids bigint[];
+begin
+    -- Look up file IDs inside, not from payload
+    select array_agg(f.file_id)
+    into _file_ids
+    from files.account_files(_account_id) f;
+    
+    -- ... rest of supervisor logic
+end;
+$$;
+```
+
+```sql
+-- BAD: passing derived data in the payload
+-- Caller must know about files, payload can become stale
+perform queues.enqueue('db_function', jsonb_build_object(
+    'db_function', 'accounts.account_deletion_supervisor',
+    'account_id', _account_id,
+    'file_ids', _file_ids,  -- stale if files change, look them up inside the supervisor
+    'email_count', _email_count  -- unnecessary coupling
+));
+```
+
+The exception is identifiers that the supervisor truly needs from the caller and cannot derive, like a parent task ID for tracing. But even then, prefer fewer fields over more.
+
+For supervisors that orchestrate other supervisors (supervision trees), this principle is especially important. The parent supervisor should receive only its own task ID; child identifiers are discovered by querying current state. See [Supervision Trees](./supervision-trees.md) for more on hierarchical supervisor design.
+
 ### Debugging workflow
 
 When a supervisor misbehaves:
@@ -372,5 +421,6 @@ We create a "send email" task and ask the supervisor to shepherd it. The first r
 
 ### See also
 
+- Hierarchical supervision: [`./supervision-trees.md`](./supervision-trees.md)
 - Facts function pattern: [`./facts-logic-effects.md`](./facts-logic-effects.md)
 - Queues and worker mechanics: [`../postgres/queues-and-worker.md`](../postgres/queues-and-worker.md)
