@@ -40,7 +40,7 @@ Child supervisor (e.g., file_deletion_supervisor)
 └── Terminates when done or stuck
 ```
 
-The root supervisor doesn't block waiting for children to signal completion. Instead, it runs periodically—either on a schedule (say, every 30 seconds) or when a child enqueues it upon completion. Each time it runs, it checks the current state: "Are all files deleted? Is anonymization complete?" If yes, proceed. If no, schedule another check.
+The root supervisor doesn't block waiting for children to signal completion. Instead, it runs periodically; either on a schedule (say, every 30 seconds) or when a child enqueues it upon completion. Each time it runs, it checks the current state: "Are all files deleted? Is anonymization complete?" If yes, proceed. If no, schedule another check.
 
 This state-checking approach has a crucial property: **the parent can run at any time without causing incorrect behavior**. Even if the parent runs "early" (before children finish), it simply observes incomplete state and waits. Even if it runs "late" (long after children finish), it observes complete state and proceeds. The system is correct regardless of timing.
 
@@ -64,7 +64,7 @@ end if;
 -- now safe to proceed to anonymization
 ```
 
-This might feel repetitive—you're constantly re-checking things that "should" be done. But this repetition is what makes the system reliable. If a child supervisor fails, retries, and eventually succeeds, the parent will eventually see that success. If a child gets stuck, the parent will notice (via stuck detection) and can record its own failure.
+This might feel repetitive. You're constantly re-checking things that "should" be done. But this repetition is what makes the system reliable. If a child supervisor fails, retries, and eventually succeeds, the parent will eventually see that success. If a child gets stuck, the parent will notice (via stuck detection) and can record its own failure.
 
 ### Designing a supervision tree
 
@@ -84,7 +84,7 @@ A phase needs its own supervisor when:
 - It has multiple items to process (many files, many records)
 - It needs independent retry logic
 
-File deletion needs its own supervisor because each file deletion involves external storage and might fail independently. Anonymization might be simple enough to inline, or complex enough to warrant its own supervisor—depends on the data volume.
+File deletion needs its own supervisor because each file deletion involves external storage and might fail independently. Anonymization might be simple enough to inline, or complex enough to warrant its own supervisor, depending on the data volume.
 
 **3. How does the parent track child completion?**
 
@@ -164,7 +164,7 @@ perform record_deletion_success(_task_id);
 return 'succeeded';
 ```
 
-Each phase checks its precondition before proceeding. The supervisor doesn't know or care how long file deletion takes—it just checks whether files are deleted. If they're not, it schedules another check and exits.
+Each phase checks its precondition before proceeding. The supervisor doesn't know or care how long file deletion takes; it just checks whether files are deleted. If they're not, it schedules another check and exits.
 
 ### Child supervisor independence
 
@@ -207,9 +207,9 @@ There are two ways to trigger the parent supervisor:
 
 A common pattern is exponential backoff based on how many times you've checked without progress. First check after 5 seconds, then 10, then 20, up to some maximum.
 
-**2. Child-triggered**: The child supervisor enqueues the parent to run immediately when it completes (success or permanent failure). This reduces latency—the parent proceeds as soon as possible rather than waiting for its next scheduled run.
+**2. Child-triggered**: The child supervisor enqueues the parent to run immediately when it completes (success or permanent failure). This reduces latency. The parent proceeds as soon as possible rather than waiting for its next scheduled run.
 
-You can combine both approaches: children trigger the parent on completion, and the parent also schedules periodic rechecks as a safety net. Even with child triggers, the parent should verify state rather than trusting the trigger—triggers can arrive out of order or be duplicated.
+You can combine both approaches: children trigger the parent on completion, and the parent also schedules periodic rechecks as a safety net. Even with child triggers, the parent should verify state rather than trusting the trigger. Triggers can arrive out of order or be duplicated.
 
 ### Failure propagation
 
@@ -219,7 +219,7 @@ When a child fails permanently, the parent needs to know. This happens through s
 2. Parent queries `is_child_stuck(_id)` as part of its facts
 3. Parent sees stuck state and records its own failure
 
-The parent doesn't receive a crash signal; it discovers the stuck state on its next run. The child can enqueue the parent immediately when it becomes stuck, or the parent discovers it during a scheduled recheck—either way, the parent needs to run to notice child failures.
+The parent doesn't receive a crash signal; it discovers the stuck state on its next run. The child can enqueue the parent immediately when it becomes stuck, or the parent discovers it during a scheduled recheck. Either way, the parent needs to run to notice child failures.
 
 ### Summary
 
