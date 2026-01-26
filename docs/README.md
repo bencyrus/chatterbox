@@ -25,6 +25,9 @@ Last verified: 2025-10-08
 
   - [Facts, Logic, Effects](patterns/facts-logic-effects.md)
   - [Supervisors](patterns/supervisors.md)
+  - [Supervision Trees](patterns/supervision-trees.md)
+  - [Exception Handling](patterns/exception-handling.md)
+
 
 - [Postgres](postgres/README.md)
 
