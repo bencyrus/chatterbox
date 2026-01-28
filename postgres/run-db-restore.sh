@@ -37,5 +37,3 @@ echo "Restoring cluster from ${BACKUP_FILE} (no volume wipe) ..."
 gunzip -c "${BACKUP_FILE}" | docker compose exec -T postgres sh -lc 'psql -U "$POSTGRES_USER" -d postgres'
 
 echo "Restore complete."
-
-

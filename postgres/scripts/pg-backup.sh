@@ -14,4 +14,3 @@ mkdir -p "${BACKUP_DIR}"
 echo "Creating full cluster snapshot as '${DB_USER}' -> ${OUT_FILE}"
 pg_dumpall -U "${DB_USER}" | gzip -9 > "${OUT_FILE}"
 echo "Backup complete: ${OUT_FILE}"
-

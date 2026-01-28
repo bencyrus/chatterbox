@@ -14,5 +14,3 @@ else
   echo "No cluster backup found in ./postgres/backups (check container logs)." >&2
   exit 1
 fi
-
-
