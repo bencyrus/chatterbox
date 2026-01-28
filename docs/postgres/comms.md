@@ -20,14 +20,16 @@ Last verified: 2025-10-08
 - Templates (optional, used by API helpers)
   - `comms.email_template`, `comms.sms_template` with `template_key`, `subject`/`body`, and `body_params`.
 
-### Process model (facts)
+### Process model (task and attempts)
 
 - Email
   - Root: `comms.send_email_task`
-  - Facts: `..._scheduled` (append-only), `..._failed` (append-only), `..._succeeded` (terminal)
+  - Attempts: `comms.send_email_attempt` (append-only, one per scheduled execution)
+  - Outcomes: `comms.send_email_attempt_succeeded`, `comms.send_email_attempt_failed` (one per attempt at most)
 - SMS
   - Root: `comms.send_sms_task`
-  - Facts: `..._scheduled`, `..._failed`, `..._succeeded`
+  - Attempts: `comms.send_sms_attempt`
+  - Outcomes: `comms.send_sms_attempt_succeeded`, `comms.send_sms_attempt_failed`
 
 ### Kickoff helpers (internal)
 
@@ -39,16 +41,16 @@ Last verified: 2025-10-08
 ### Supervisors and handlers
 
 - Supervisors are security definer functions:
-  - `comms.send_email_supervisor(payload jsonb)`
-  - `comms.send_sms_supervisor(payload jsonb)`
+  - `comms.send_email_supervisor(_payload jsonb)`
+  - `comms.send_sms_supervisor(_payload jsonb)`
 - Behavior (summary, see queues/worker doc for details):
   - Validate payload id, lock the root row, check terminal/attempt guards using facts helpers.
-  - If no outstanding attempt (`scheduled <= failures`), insert a `..._scheduled` fact and enqueue a channel task now with handlers.
+  - If no outstanding attempt (`attempts = failures`), create an attempt and enqueue a channel task with handlers.
   - Re-enqueue the supervisor using exponential backoff based on failures.
 - Handlers (security definer):
-  - Before: `comms.get_email_payload(payload jsonb)`, `comms.get_sms_payload(payload jsonb)` → JSON envelope with `success/payload` or `validation_failure_message`.
-  - Success: `comms.record_email_success(payload jsonb)`, `comms.record_sms_success(payload jsonb)` (insert terminal success fact, idempotent).
-  - Error: `comms.record_email_failure(payload jsonb)`, `comms.record_sms_failure(payload jsonb)` (append failure fact).
+  - Before: `comms.get_email_payload(_payload jsonb)`, `comms.get_sms_payload(_payload jsonb)` → JSON envelope with `success/payload` or `validation_failure_message`. Receives `send_email_attempt_id` (or `send_sms_attempt_id`).
+  - Success: `comms.record_email_success(_payload jsonb)`, `comms.record_sms_success(_payload jsonb)` (insert attempt success fact, idempotent).
+  - Error: `comms.record_email_failure(_payload jsonb)`, `comms.record_sms_failure(_payload jsonb)` (insert attempt failure fact).
 
 ### Payload contracts
 
@@ -67,12 +69,14 @@ Last verified: 2025-10-08
 ```json
 {
   "task_type": "email",
-  "send_email_task_id": 123,
+  "send_email_attempt_id": 456,
   "before_handler": "comms.get_email_payload",
   "success_handler": "comms.record_email_success",
   "error_handler": "comms.record_email_failure"
 }
 ```
+
+Note: The supervisor receives `send_email_task_id` (the root task). The channel task receives `send_email_attempt_id` (the specific attempt). Handlers record success/failure against the attempt, which can then be joined back to the task for supervisor decisions.
 
 ### API examples
 
@@ -87,8 +91,9 @@ select api.hello_world_sms('+15551234567');
 
 - Seeded templates (for examples): `hello_world_email`, `hello_world_sms`.
 
-- Error handling is append-only: operational errors are also written to `queues.error` by the worker.
-- All business logic state is derived from facts tables and uniqueness constraints; functions are idempotent.
+- Error handling: operational errors are written to `queues.error` by the worker.
+- All business logic state is derived from attempt facts; functions are idempotent.
+- Success/failure is recorded per attempt, not per task. The supervisor queries `has_send_email_succeeded_attempt(_task_id)` to check if any attempt succeeded.
 - See `docs/postgres/queues-and-worker.md` for the worker lifecycle and the standard function result envelope.
 
 ### See also

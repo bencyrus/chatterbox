@@ -104,7 +104,6 @@ create or replace function comms.create_email_message(
     out validation_failure_message text,
     out created_message_id bigint
 )
-returns record
 language plpgsql
 security definer
 as $$
@@ -143,7 +142,6 @@ create or replace function comms.create_sms_message(
     out validation_failure_message text,
     out created_message_id bigint
 )
-returns record
 language plpgsql
 security definer
 as $$
@@ -185,64 +183,62 @@ $$;
 
 -- comms queue schemas and functions
 
--- send email process: tasks and facts (append-only)
+-- send email process: task and attempts (append-only)
 create table comms.send_email_task (
     send_email_task_id bigserial primary key,
     message_id bigint not null references comms.message(message_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- scheduled facts (append-only, one per scheduled attempt)
-create table comms.send_email_task_scheduled (
-    send_email_task_scheduled_id bigserial primary key,
+-- attempts (append-only, one per scheduled attempt)
+create table comms.send_email_attempt (
+    send_email_attempt_id bigserial primary key,
     send_email_task_id bigint not null references comms.send_email_task(send_email_task_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- success facts (one per logical task)
-create table comms.send_email_task_succeeded (
-    send_email_task_id bigint primary key references comms.send_email_task(send_email_task_id) on delete cascade,
+-- attempt succeeded (one per attempt at most)
+create table comms.send_email_attempt_succeeded (
+    send_email_attempt_id bigint primary key references comms.send_email_attempt(send_email_attempt_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- failure facts (append-only, one per failed attempt)
-create table comms.send_email_task_failed (
-    send_email_task_failed_id bigserial primary key,
-    send_email_task_id bigint not null references comms.send_email_task(send_email_task_id) on delete cascade,
+-- attempt failed (one per attempt at most)
+create table comms.send_email_attempt_failed (
+    send_email_attempt_id bigint primary key references comms.send_email_attempt(send_email_attempt_id) on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
 
--- send sms process: tasks and facts (append-only)
+-- send sms process: task and attempts (append-only)
 create table comms.send_sms_task (
     send_sms_task_id bigserial primary key,
     message_id bigint not null references comms.message(message_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- scheduled facts (append-only, one per scheduled attempt)
-create table comms.send_sms_task_scheduled (
-    send_sms_task_scheduled_id bigserial primary key,
+-- attempts (append-only, one per scheduled attempt)
+create table comms.send_sms_attempt (
+    send_sms_attempt_id bigserial primary key,
     send_sms_task_id bigint not null references comms.send_sms_task(send_sms_task_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- success facts (one per logical task)
-create table comms.send_sms_task_succeeded (
-    send_sms_task_id bigint primary key references comms.send_sms_task(send_sms_task_id) on delete cascade,
+-- attempt succeeded (one per attempt at most)
+create table comms.send_sms_attempt_succeeded (
+    send_sms_attempt_id bigint primary key references comms.send_sms_attempt(send_sms_attempt_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
--- failure facts (append-only, one per failed attempt)
-create table comms.send_sms_task_failed (
-    send_sms_task_failed_id bigserial primary key,
-    send_sms_task_id bigint not null references comms.send_sms_task(send_sms_task_id) on delete cascade,
+-- attempt failed (one per attempt at most)
+create table comms.send_sms_attempt_failed (
+    send_sms_attempt_id bigint primary key references comms.send_sms_attempt(send_sms_attempt_id) on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
 
--- facts: has the send_email_task succeeded?
-create or replace function comms.has_send_email_task_succeeded(
+-- facts: has a succeeded attempt for send_email_task?
+create or replace function comms.has_send_email_succeeded_attempt(
     _send_email_task_id bigint
 )
 returns boolean
@@ -251,13 +247,14 @@ stable
 as $$
     select exists (
         select 1
-        from comms.send_email_task_succeeded s
-        where s.send_email_task_id = _send_email_task_id
+        from comms.send_email_attempt a
+        join comms.send_email_attempt_succeeded s on s.send_email_attempt_id = a.send_email_attempt_id
+        where a.send_email_task_id = _send_email_task_id
     );
 $$;
 
--- facts: count failures for send_email_task
-create or replace function comms.count_send_email_task_failures(
+-- facts: count failed attempts for send_email_task
+create or replace function comms.count_send_email_failed_attempts(
     _send_email_task_id bigint
 )
 returns integer
@@ -265,12 +262,13 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from comms.send_email_task_failed f
-    where f.send_email_task_id = _send_email_task_id;
+    from comms.send_email_attempt a
+    join comms.send_email_attempt_failed f on f.send_email_attempt_id = a.send_email_attempt_id
+    where a.send_email_task_id = _send_email_task_id;
 $$;
 
--- facts: count scheduled attempts for send_email_task
-create or replace function comms.count_send_email_task_scheduled(
+-- facts: count attempts for send_email_task
+create or replace function comms.count_send_email_attempts(
     _send_email_task_id bigint
 )
 returns integer
@@ -278,13 +276,53 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from comms.send_email_task_scheduled s
-    where s.send_email_task_id = _send_email_task_id;
+    from comms.send_email_attempt a
+    where a.send_email_task_id = _send_email_task_id;
 $$;
 
--- before handler: build provider payload from send_email_task_id in payload
+-- facts: aggregated facts for send_email_supervisor
+create or replace function comms.send_email_supervisor_facts(
+    _send_email_task_id bigint,
+    out has_success boolean,
+    out num_failures integer,
+    out num_attempts integer
+)
+language sql
+stable
+as $$
+    select
+        comms.has_send_email_succeeded_attempt(_send_email_task_id),
+        comms.count_send_email_failed_attempts(_send_email_task_id),
+        comms.count_send_email_attempts(_send_email_task_id);
+$$;
+
+-- facts: get email payload facts from attempt_id
+create or replace function comms.get_email_payload_facts(
+    _send_email_attempt_id bigint,
+    out message_id bigint,
+    out from_address text,
+    out to_address text,
+    out subject text,
+    out html text
+)
+language sql
+stable
+as $$
+    select
+        em.message_id,
+        em.from_address,
+        em.to_address,
+        em.subject,
+        em.html
+    from comms.send_email_attempt a
+    join comms.send_email_task t on t.send_email_task_id = a.send_email_task_id
+    join comms.email_message em on em.message_id = t.message_id
+    where a.send_email_attempt_id = _send_email_attempt_id;
+$$;
+
+-- before handler: build provider payload from send_email_attempt_id in payload
 create or replace function comms.get_email_payload(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
@@ -292,221 +330,196 @@ stable
 security definer
 as $$
 declare
-    _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
-    _message_id bigint;
-    _result jsonb;
+    _send_email_attempt_id bigint := (_payload->>'send_email_attempt_id')::bigint;
+    _facts record;
 begin
-    -- validation
-    if _send_email_task_id is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_send_email_task_id'
-        );
+    if _send_email_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_email_attempt_id');
     end if;
 
-    -- facts
-    select set.message_id
-    into _message_id
-    from comms.send_email_task set
-    where set.send_email_task_id = _send_email_task_id;
+    _facts := comms.get_email_payload_facts(_send_email_attempt_id);
 
-    if _message_id is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'task_not_found'
-        );
-    end if;
-
-    -- compute
-    select to_jsonb(email_payload)
-    into _result
-    from (
-        select 
-            em.message_id,
-            em.from_address,
-            em.to_address,
-            em.subject,
-            em.html
-        from comms.email_message em
-        where em.message_id = _message_id
-    ) email_payload;
-
-    -- output
-    if _result is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'payload_not_found'
-        );
+    if _facts.message_id is null then
+        return jsonb_build_object('status', 'email_message_not_found');
     end if;
 
     return jsonb_build_object(
-        'success', true,
-        'payload', _result
+        'status', 'succeeded',
+        'payload', jsonb_build_object(
+            'message_id', _facts.message_id,
+            'from_address', _facts.from_address,
+            'to_address', _facts.to_address,
+            'subject', _facts.subject,
+            'html', _facts.html
+        )
     );
 end;
 $$;
 
 -- success handler: record success fact
+-- receives: { original_payload: { send_email_attempt_id, ... }, worker_payload: { ... } }
 create or replace function comms.record_email_success(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_email_task_id bigint := coalesce((
-        payload->'original_payload'->>'send_email_task_id'
-    )::bigint, (
-        payload->>'send_email_task_id'
-    )::bigint);
+    _send_email_attempt_id bigint := (_payload->'original_payload'->>'send_email_attempt_id')::bigint;
 begin
-    -- validation
-    if _send_email_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_email_task_id'
-        );
+    if _send_email_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_email_attempt_id');
     end if;
 
-    -- output
-    insert into comms.send_email_task_succeeded (send_email_task_id)
-    values (_send_email_task_id)
-    on conflict (send_email_task_id) do nothing;
+    insert into comms.send_email_attempt_succeeded (send_email_attempt_id)
+    values (_send_email_attempt_id)
+    on conflict (send_email_attempt_id) do nothing;
 
-    return jsonb_build_object(
-        'success', true
-    );
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
 -- error handler: record failure fact
+-- receives: { original_payload: { send_email_attempt_id, ... }, error: "..." }
 create or replace function comms.record_email_failure(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_email_task_id bigint := coalesce((
-        payload->'original_payload'->>'send_email_task_id'
-    )::bigint, (
-        payload->>'send_email_task_id'
-    )::bigint);
-    _error_message text := (payload->>'error')::text;
+    _send_email_attempt_id bigint := (_payload->'original_payload'->>'send_email_attempt_id')::bigint;
+    _error_message text := _payload->>'error';
 begin
-    -- validation
-    if _send_email_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_email_task_id'
-        );
+    if _send_email_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_email_attempt_id');
     end if;
 
-    -- output
-    insert into comms.send_email_task_failed (send_email_task_id, error_message)
-    values (_send_email_task_id, _error_message);
+    insert into comms.send_email_attempt_failed (send_email_attempt_id, error_message)
+    values (_send_email_attempt_id, _error_message)
+    on conflict (send_email_attempt_id) do nothing;
 
-    return jsonb_build_object(
-        'success', true
+    return jsonb_build_object('status', 'succeeded');
+end;
+$$;
+
+-- effect: schedule an email send attempt
+create or replace function comms.schedule_email_attempt(
+    _send_email_task_id bigint
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _send_email_attempt_id bigint;
+begin
+    insert into comms.send_email_attempt (send_email_task_id)
+    values (_send_email_task_id)
+    returning send_email_attempt_id into _send_email_attempt_id;
+
+    perform queues.enqueue(
+        'email',
+        jsonb_build_object(
+            'task_type', 'email',
+            'send_email_attempt_id', _send_email_attempt_id,
+            'before_handler', 'comms.get_email_payload',
+            'success_handler', 'comms.record_email_success',
+            'error_handler', 'comms.record_email_failure'
+        ),
+        now()
     );
 end;
 $$;
 
--- supervisor: orchestrates email sending using append-only facts
--- Supervisor behavior:
--- - Locks the root task to serialize concurrent runs
--- - Terminates early if succeeded or attempts exhausted
--- - If no attempt is outstanding (scheduled <= failures), records a scheduled fact and enqueues the channel task
--- - Always re-enqueues itself once per run at computed backoff
-create or replace function comms.send_email_supervisor(
-    payload jsonb
+-- effect: schedule supervisor recheck with exponential backoff
+create or replace function comms.schedule_email_supervisor_recheck(
+    _send_email_task_id bigint,
+    _num_failures integer,
+    _run_count integer
 )
-returns jsonb
+returns void
 language plpgsql
 security definer
 as $$
 declare
-    _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
-    _has_success boolean;
-    _num_failures integer;
-    _num_scheduled integer;
-    _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
     _base_delay_seconds integer := 5;
     _next_check_at timestamptz;
 begin
-    -- validation
-    if _send_email_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_email_task_id'
-        );
-    end if;
-
-    -- lock root task to avoid duplicate scheduling under concurrency
-    perform 1
-    from comms.send_email_task t
-    where t.send_email_task_id = _send_email_task_id
-    for update;
-
-    select comms.has_send_email_task_succeeded(_send_email_task_id)
-    into _has_success;
-    
-    if _has_success then
-        return jsonb_build_object(
-            'success', true
-        );
-    end if;
-
-    select comms.count_send_email_task_failures(_send_email_task_id)
-    into _num_failures;
-
-    if _num_failures >= _max_attempts then
-        return jsonb_build_object(
-            'success', true
-        );
-    end if;
-
-    select comms.count_send_email_task_scheduled(_send_email_task_id)
-    into _num_scheduled;
-
-    -- compute
-    -- next check at exponential backoff based on failures
-    _next_check_at := (
-        now() +
-        ((_base_delay_seconds)::double precision * power(2, _num_failures)) *
-        interval '1 second'
-    );
-
-    -- schedule a new attempt only if there is no outstanding scheduled attempt
-    if _num_scheduled <= _num_failures then
-        insert into comms.send_email_task_scheduled (send_email_task_id)
-        values (_send_email_task_id);
-
-        perform queues.enqueue(
-            'email',
-            jsonb_build_object(
-                'task_type', 'email',
-                'send_email_task_id', _send_email_task_id,
-                'before_handler', 'comms.get_email_payload',
-                'success_handler', 'comms.record_email_success',
-                'error_handler', 'comms.record_email_failure'
-            ),
-            now()
-        );
-    end if;
+    _next_check_at := now() + (
+        _base_delay_seconds * power(2, _num_failures)
+    ) * interval '1 second';
 
     perform queues.enqueue(
         'db_function',
         jsonb_build_object(
             'task_type', 'db_function',
             'db_function', 'comms.send_email_supervisor',
-            'send_email_task_id', _send_email_task_id
+            'send_email_task_id', _send_email_task_id,
+            'run_count', _run_count + 1
         ),
         _next_check_at
     );
+end;
+$$;
 
-    return jsonb_build_object(
-        'success', true
+-- supervisor: orchestrates email sending using append-only facts
+create or replace function comms.send_email_supervisor(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_email_task_id bigint := (_payload->>'send_email_task_id')::bigint;
+    _run_count integer := coalesce((_payload->>'run_count')::integer, 0);
+    _max_runs integer := 20;
+    _max_attempts integer := 2;
+    _facts record;
+begin
+    -- 1. VALIDATION
+    if _send_email_task_id is null then
+        return jsonb_build_object('status', 'missing_send_email_task_id');
+    end if;
+
+    if _run_count >= _max_runs then
+        raise exception 'send_email_supervisor exceeded max runs'
+            using detail = 'Possible infinite loop detected',
+                  hint = format('task_id=%s, run_count=%s', _send_email_task_id, _run_count);
+    end if;
+
+    -- 2. LOCK (before facts)
+    perform 1
+    from comms.send_email_task t
+    where t.send_email_task_id = _send_email_task_id
+    for update;
+
+    -- 3. FACTS
+    _facts := comms.send_email_supervisor_facts(_send_email_task_id);
+
+    -- 4. LOGIC + EFFECTS
+    if _facts.has_success then
+        return jsonb_build_object('status', 'succeeded');
+    end if;
+
+    if _facts.num_failures >= _max_attempts then
+        return jsonb_build_object('status', 'max_attempts_reached');
+    end if;
+
+    if _facts.num_attempts = _facts.num_failures then
+        perform comms.schedule_email_attempt(_send_email_task_id);
+    end if;
+
+    perform comms.schedule_email_supervisor_recheck(
+        _send_email_task_id,
+        _facts.num_failures,
+        _run_count
     );
+
+    return jsonb_build_object('status', 'scheduled');
 end;
 $$;
 
@@ -612,10 +625,12 @@ grant execute on function comms.kickoff_send_email_task(bigint, timestamp with t
 grant execute on function comms.get_email_payload(jsonb) to worker_service_user;
 grant execute on function comms.record_email_success(jsonb) to worker_service_user;
 grant execute on function comms.record_email_failure(jsonb) to worker_service_user;
+grant execute on function comms.schedule_email_attempt(bigint) to worker_service_user;
+grant execute on function comms.schedule_email_supervisor_recheck(bigint, integer, integer) to worker_service_user;
 grant execute on function comms.send_email_supervisor(jsonb) to worker_service_user;
 
--- facts: has the send_sms_task succeeded?
-create or replace function comms.has_send_sms_task_succeeded(
+-- facts: has a succeeded attempt for send_sms_task?
+create or replace function comms.has_send_sms_succeeded_attempt(
     _send_sms_task_id bigint
 )
 returns boolean
@@ -624,13 +639,14 @@ stable
 as $$
     select exists (
         select 1
-        from comms.send_sms_task_succeeded s
-        where s.send_sms_task_id = _send_sms_task_id
+        from comms.send_sms_attempt a
+        join comms.send_sms_attempt_succeeded s on s.send_sms_attempt_id = a.send_sms_attempt_id
+        where a.send_sms_task_id = _send_sms_task_id
     );
 $$;
 
--- facts: count failures for send_sms_task
-create or replace function comms.count_send_sms_task_failures(
+-- facts: count failed attempts for send_sms_task
+create or replace function comms.count_send_sms_failed_attempts(
     _send_sms_task_id bigint
 )
 returns integer
@@ -638,12 +654,13 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from comms.send_sms_task_failed f
-    where f.send_sms_task_id = _send_sms_task_id;
+    from comms.send_sms_attempt a
+    join comms.send_sms_attempt_failed f on f.send_sms_attempt_id = a.send_sms_attempt_id
+    where a.send_sms_task_id = _send_sms_task_id;
 $$;
 
--- facts: count scheduled attempts for send_sms_task
-create or replace function comms.count_send_sms_task_scheduled(
+-- facts: count attempts for send_sms_task
+create or replace function comms.count_send_sms_attempts(
     _send_sms_task_id bigint
 )
 returns integer
@@ -651,13 +668,49 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from comms.send_sms_task_scheduled s
-    where s.send_sms_task_id = _send_sms_task_id;
+    from comms.send_sms_attempt a
+    where a.send_sms_task_id = _send_sms_task_id;
 $$;
 
--- before handler: build provider payload from send_sms_task_id in payload
+-- facts: aggregated facts for send_sms_supervisor
+create or replace function comms.send_sms_supervisor_facts(
+    _send_sms_task_id bigint,
+    out has_success boolean,
+    out num_failures integer,
+    out num_attempts integer
+)
+language sql
+stable
+as $$
+    select
+        comms.has_send_sms_succeeded_attempt(_send_sms_task_id),
+        comms.count_send_sms_failed_attempts(_send_sms_task_id),
+        comms.count_send_sms_attempts(_send_sms_task_id);
+$$;
+
+-- facts: get sms payload facts from attempt_id
+create or replace function comms.get_sms_payload_facts(
+    _send_sms_attempt_id bigint,
+    out message_id bigint,
+    out to_number text,
+    out body text
+)
+language sql
+stable
+as $$
+    select
+        sm.message_id,
+        sm.to_number,
+        sm.body
+    from comms.send_sms_attempt a
+    join comms.send_sms_task t on t.send_sms_task_id = a.send_sms_task_id
+    join comms.sms_message sm on sm.message_id = t.message_id
+    where a.send_sms_attempt_id = _send_sms_attempt_id;
+$$;
+
+-- before handler: build provider payload from send_sms_attempt_id in payload
 create or replace function comms.get_sms_payload(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
@@ -665,219 +718,194 @@ stable
 security definer
 as $$
 declare
-    _send_sms_task_id bigint := (payload->>'send_sms_task_id')::bigint;
-    _message_id bigint;
-    _result jsonb;
+    _send_sms_attempt_id bigint := (_payload->>'send_sms_attempt_id')::bigint;
+    _facts record;
 begin
-    -- validation
-    if _send_sms_task_id is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_send_sms_task_id'
-        );
+    if _send_sms_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_sms_attempt_id');
     end if;
 
-    -- facts
-    select sst.message_id
-    into _message_id
-    from comms.send_sms_task sst
-    where sst.send_sms_task_id = _send_sms_task_id;
+    _facts := comms.get_sms_payload_facts(_send_sms_attempt_id);
 
-    if _message_id is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'task_not_found'
-        );
-    end if;
-
-    -- compute
-    select to_jsonb(sms_payload)
-    into _result
-    from (
-        select 
-            sm.message_id,
-            sm.to_number,
-            sm.body
-        from comms.sms_message sm
-        where sm.message_id = _message_id
-    ) sms_payload;
-
-    -- output
-    if _result is null then
-        return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'payload_not_found'
-        );
+    if _facts.message_id is null then
+        return jsonb_build_object('status', 'attempt_not_found');
     end if;
 
     return jsonb_build_object(
-        'success', true,
-        'payload', _result
+        'status', 'succeeded',
+        'payload', jsonb_build_object(
+            'message_id', _facts.message_id,
+            'to_number', _facts.to_number,
+            'body', _facts.body
+        )
     );
 end;
 $$;
 
 -- success handler: record success fact
+-- receives: { original_payload: { send_sms_attempt_id, ... }, worker_payload: { ... } }
 create or replace function comms.record_sms_success(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_sms_task_id bigint := coalesce((
-        payload->'original_payload'->>'send_sms_task_id'
-    )::bigint, (
-        payload->>'send_sms_task_id'
-    )::bigint);
+    _send_sms_attempt_id bigint := (_payload->'original_payload'->>'send_sms_attempt_id')::bigint;
 begin
-    -- validation
-    if _send_sms_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_sms_task_id'
-        );
+    if _send_sms_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_sms_attempt_id');
     end if;
 
-    -- output
-    insert into comms.send_sms_task_succeeded (send_sms_task_id)
-    values (_send_sms_task_id)
-    on conflict (send_sms_task_id) do nothing;
+    insert into comms.send_sms_attempt_succeeded (send_sms_attempt_id)
+    values (_send_sms_attempt_id)
+    on conflict (send_sms_attempt_id) do nothing;
 
-    return jsonb_build_object(
-        'success', true
-    );
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
 -- error handler: record failure fact
+-- receives: { original_payload: { send_sms_attempt_id, ... }, error: "..." }
 create or replace function comms.record_sms_failure(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_sms_task_id bigint := coalesce((
-        payload->'original_payload'->>'send_sms_task_id'
-    )::bigint, (
-        payload->>'send_sms_task_id'
-    )::bigint);
-    _error_message text := (payload->>'error')::text;
+    _send_sms_attempt_id bigint := (_payload->'original_payload'->>'send_sms_attempt_id')::bigint;
+    _error_message text := _payload->>'error';
 begin
-    -- validation
-    if _send_sms_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_sms_task_id'
-        );
+    if _send_sms_attempt_id is null then
+        return jsonb_build_object('status', 'missing_send_sms_attempt_id');
     end if;
 
-    -- output
-    insert into comms.send_sms_task_failed (send_sms_task_id, error_message)
-    values (_send_sms_task_id, _error_message);
+    insert into comms.send_sms_attempt_failed (send_sms_attempt_id, error_message)
+    values (_send_sms_attempt_id, _error_message)
+    on conflict (send_sms_attempt_id) do nothing;
 
-    return jsonb_build_object(
-        'success', true
+    return jsonb_build_object('status', 'succeeded');
+end;
+$$;
+
+-- effect: schedule an sms send attempt
+create or replace function comms.schedule_sms_attempt(
+    _send_sms_task_id bigint
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_attempt_id bigint;
+begin
+    insert into comms.send_sms_attempt (send_sms_task_id)
+    values (_send_sms_task_id)
+    returning send_sms_attempt_id into _send_sms_attempt_id;
+
+    perform queues.enqueue(
+        'sms',
+        jsonb_build_object(
+            'task_type', 'sms',
+            'send_sms_attempt_id', _send_sms_attempt_id,
+            'before_handler', 'comms.get_sms_payload',
+            'success_handler', 'comms.record_sms_success',
+            'error_handler', 'comms.record_sms_failure'
+        ),
+        now()
     );
 end;
 $$;
 
--- supervisor: orchestrates sms sending using append-only facts
--- Supervisor behavior:
--- - Locks the root task to serialize concurrent runs
--- - Terminates early if succeeded or attempts exhausted
--- - If no attempt is outstanding (scheduled <= failures), records a scheduled fact and enqueues the channel task
--- - Always re-enqueues itself once per run at computed backoff
-create or replace function comms.send_sms_supervisor(
-    payload jsonb
+-- effect: schedule sms supervisor recheck with exponential backoff
+create or replace function comms.schedule_sms_supervisor_recheck(
+    _send_sms_task_id bigint,
+    _num_failures integer,
+    _run_count integer
 )
-returns jsonb
+returns void
 language plpgsql
 security definer
 as $$
 declare
-    _send_sms_task_id bigint := (payload->>'send_sms_task_id')::bigint;
-    _has_success boolean;
-    _num_failures integer;
-    _num_scheduled integer;
-    _max_attempts integer := 2; -- one retry (1 failure + 1 final attempt)
     _base_delay_seconds integer := 5;
     _next_check_at timestamptz;
 begin
-    -- validation
-    if _send_sms_task_id is null then
-        return jsonb_build_object(
-            'error', 'missing_send_sms_task_id'
-        );
-    end if;
-
-    -- lock root task to avoid duplicate scheduling under concurrency
-    perform 1
-    from comms.send_sms_task t
-    where t.send_sms_task_id = _send_sms_task_id
-    for update;
-
-    select comms.has_send_sms_task_succeeded(_send_sms_task_id)
-    into _has_success;
-    
-    if _has_success then
-        return jsonb_build_object(
-            'success', true
-        );
-    end if;
-
-    select comms.count_send_sms_task_failures(_send_sms_task_id)
-    into _num_failures;
-
-    if _num_failures >= _max_attempts then
-        return jsonb_build_object(
-            'success', true
-        );
-    end if;
-
-    select comms.count_send_sms_task_scheduled(_send_sms_task_id)
-    into _num_scheduled;
-
-    -- compute
-    -- next check at exponential backoff based on failures
-    _next_check_at := (
-        now() +
-        ((_base_delay_seconds)::double precision * power(2, _num_failures)) *
-        interval '1 second'
-    );
-
-    -- schedule a new attempt only if there is no outstanding scheduled attempt
-    if _num_scheduled <= _num_failures then
-        insert into comms.send_sms_task_scheduled (send_sms_task_id)
-        values (_send_sms_task_id);
-
-        perform queues.enqueue(
-            'sms',
-            jsonb_build_object(
-                'task_type', 'sms',
-                'send_sms_task_id', _send_sms_task_id,
-                'before_handler', 'comms.get_sms_payload',
-                'success_handler', 'comms.record_sms_success',
-                'error_handler', 'comms.record_sms_failure'
-            ),
-            now()
-        );
-    end if;
+    _next_check_at := now() + (
+        _base_delay_seconds * power(2, _num_failures)
+    ) * interval '1 second';
 
     perform queues.enqueue(
         'db_function',
         jsonb_build_object(
             'task_type', 'db_function',
             'db_function', 'comms.send_sms_supervisor',
-            'send_sms_task_id', _send_sms_task_id
+            'send_sms_task_id', _send_sms_task_id,
+            'run_count', _run_count + 1
         ),
         _next_check_at
     );
+end;
+$$;
 
-    return jsonb_build_object(
-        'success', true
+-- supervisor: orchestrates sms sending using append-only facts
+create or replace function comms.send_sms_supervisor(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _send_sms_task_id bigint := (_payload->>'send_sms_task_id')::bigint;
+    _run_count integer := coalesce((_payload->>'run_count')::integer, 0);
+    _max_runs integer := 20;
+    _max_attempts integer := 2;
+    _facts record;
+begin
+    -- 1. VALIDATION
+    if _send_sms_task_id is null then
+        return jsonb_build_object('status', 'missing_send_sms_task_id');
+    end if;
+
+    if _run_count >= _max_runs then
+        raise exception 'send_sms_supervisor exceeded max runs'
+            using detail = 'Possible infinite loop detected',
+                  hint = format('task_id=%s, run_count=%s', _send_sms_task_id, _run_count);
+    end if;
+
+    -- 2. LOCK (before facts)
+    perform 1
+    from comms.send_sms_task t
+    where t.send_sms_task_id = _send_sms_task_id
+    for update;
+
+    -- 3. FACTS
+    _facts := comms.send_sms_supervisor_facts(_send_sms_task_id);
+
+    -- 4. LOGIC + EFFECTS
+    if _facts.has_success then
+        return jsonb_build_object('status', 'succeeded');
+    end if;
+
+    if _facts.num_failures >= _max_attempts then
+        return jsonb_build_object('status', 'max_attempts_reached');
+    end if;
+
+    if _facts.num_attempts = _facts.num_failures then
+        perform comms.schedule_sms_attempt(_send_sms_task_id);
+    end if;
+
+    perform comms.schedule_sms_supervisor_recheck(
+        _send_sms_task_id,
+        _facts.num_failures,
+        _run_count
     );
+
+    return jsonb_build_object('status', 'scheduled');
 end;
 $$;
 
@@ -973,6 +1001,8 @@ grant execute on function comms.kickoff_send_sms_task(bigint, timestamp with tim
 grant execute on function comms.get_sms_payload(jsonb) to worker_service_user;
 grant execute on function comms.record_sms_success(jsonb) to worker_service_user;
 grant execute on function comms.record_sms_failure(jsonb) to worker_service_user;
+grant execute on function comms.schedule_sms_attempt(bigint) to worker_service_user;
+grant execute on function comms.schedule_sms_supervisor_recheck(bigint, integer, integer) to worker_service_user;
 grant execute on function comms.send_sms_supervisor(jsonb) to worker_service_user;
 
 -- seed hello world templates (idempotent)
@@ -1069,7 +1099,7 @@ begin
                   hint = _create_and_kickoff_email_task_validation_failure_message;
     end if;
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
@@ -1122,7 +1152,7 @@ begin
                   hint = _create_and_kickoff_sms_task_validation_failure_message;
     end if;
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
@@ -1136,7 +1166,6 @@ create or replace function comms.render_email_template(
     out subject text,
     out body text
 )
-returns record
 stable
 language sql
 as $$

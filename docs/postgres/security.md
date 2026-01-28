@@ -34,7 +34,8 @@ revoke execute on all functions in schema comms from public;
 -- worker role gets only what it needs
 grant usage on schema queues, internal, comms to worker_service_user;
 grant execute on function queues.dequeue_next_available_task() to worker_service_user;
-grant execute on function queues.append_error(bigint, text) to worker_service_user;
+grant execute on function queues.complete_task(bigint) to worker_service_user;
+grant execute on function queues.fail_task(bigint, text) to worker_service_user;
 grant execute on function internal.run_function(text, jsonb) to worker_service_user;
 -- supervisors/handlers are security definer; grant execute individually:
 grant execute on function comms.send_email_supervisor(jsonb) to worker_service_user;

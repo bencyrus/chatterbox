@@ -165,7 +165,7 @@ Source: [`postgres/migrations/1756075400_recording_uploads.sql`](../../postgres/
 
 ```json
 {
-  "success": true,
+  "status": "succeeded",
   "file": {
     "file_id": 5,
     "created_at": "2025-12-07T08:47:27Z",
@@ -196,7 +196,7 @@ Source: [`postgres/migrations/1756075400_recording_uploads.sql`](../../postgres/
 
 ```json
 {
-  "success": true,
+  "status": "succeeded",
   "file": {
     "file_id": 5,
     "created_at": "2025-12-07T08:47:27Z",
@@ -612,7 +612,7 @@ curl -X POST https://api.chatterbox.app/rpc/complete_recording_upload \
 Response:
 ```json
 {
-  "success": true,
+  "status": "succeeded",
   "file": {
     "file_id": 5,
     "created_at": "2025-12-07T08:47:27Z",

@@ -12,7 +12,6 @@ type Task struct {
 	Payload     json.RawMessage `json:"payload"`
 	EnqueuedAt  time.Time       `json:"enqueued_at"`
 	ScheduledAt time.Time       `json:"scheduled_at"`
-	DequeuedAt  *time.Time      `json:"dequeued_at"`
 }
 
 // TaskPayload represents the common structure of task payloads
@@ -38,11 +37,15 @@ type HandlerPayload struct {
 }
 
 // DBFunctionResult represents the result from a database function call
+// Status should be "succeeded" for success, any other value indicates non-success
 type DBFunctionResult struct {
-	Success                  bool            `json:"success,omitempty"`
-	Error                    string          `json:"error,omitempty"`
-	ValidationFailureMessage string          `json:"validation_failure_message,omitempty"`
-	Payload                  json.RawMessage `json:"payload,omitempty"`
+	Status  string          `json:"status,omitempty"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// IsSuccess returns true if status is "succeeded"
+func (r *DBFunctionResult) IsSuccess() bool {
+	return r.Status == "succeeded"
 }
 
 // TaskResult represents the result of processing a task

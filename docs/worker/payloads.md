@@ -37,12 +37,13 @@ Last verified: 2025-10-08
 
 ```json
 {
-  "success": true,
-  "error": "",
-  "validation_failure_message": "",
+  "status": "succeeded",
   "payload": {}
 }
 ```
+
+- `status`: `"succeeded"` indicates success; any other value is a non-success outcome.
+- `payload`: optional data (e.g., provider payload from before handlers).
 
 ### Lifecycle (how the worker executes)
 
@@ -79,12 +80,12 @@ Last verified: 2025-10-08
 }
 ```
 
-- Channel task (email)
+- Channel task (email) — note the attempt ID, not task ID
 
 ```json
 {
   "task_type": "email",
-  "send_email_task_id": 123,
+  "send_email_attempt_id": 456,
   "before_handler": "comms.get_email_payload",
   "success_handler": "comms.record_email_success",
   "error_handler": "comms.record_email_failure"
@@ -92,8 +93,10 @@ Last verified: 2025-10-08
 ```
 
 - Flow
-  - Before builds provider payload `{ message_id, from_address, to_address, subject, html }`.
+  - Supervisor creates an attempt and enqueues the channel task with `send_email_attempt_id`.
+  - Before handler receives attempt ID, joins to get email payload `{ message_id, from_address, to_address, subject, html }`.
   - Worker calls email provider (Resend). On success → `success_handler({ original_payload, worker_payload })`; on failure → append `queues.error` and call `error_handler({ original_payload, error })`.
+  - Success/error handlers record facts against the attempt, not the task.
 
 ### See also
 

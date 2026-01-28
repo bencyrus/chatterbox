@@ -18,20 +18,17 @@ func NewHandlerInvoker(db *database.Client) *HandlerInvoker {
 	return &HandlerInvoker{db: db}
 }
 
-// CallBefore expects handler to return DBFunctionResult with payload.
+// CallBefore expects handler to return DBFunctionResult with status="succeeded" and payload.
 // The payload is unmarshaled into target.
 func (h *HandlerInvoker) CallBefore(ctx context.Context, handlerName string, originalPayload json.RawMessage, target any) error {
 	result, err := h.db.RunFunction(ctx, handlerName, originalPayload)
 	if err != nil {
 		return fmt.Errorf("before handler %s failed: %w", handlerName, err)
 	}
-	if result.Error != "" {
-		return fmt.Errorf("before handler %s returned error: %s", handlerName, result.Error)
+	if !result.IsSuccess() {
+		return fmt.Errorf("before handler %s returned status: %s", handlerName, result.Status)
 	}
-	if result.ValidationFailureMessage != "" {
-		return fmt.Errorf(result.ValidationFailureMessage)
-	}
-	if !result.Success || len(result.Payload) == 0 {
+	if len(result.Payload) == 0 {
 		return fmt.Errorf("before handler %s did not return payload", handlerName)
 	}
 	if err := json.Unmarshal(result.Payload, target); err != nil {

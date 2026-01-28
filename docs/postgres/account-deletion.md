@@ -44,7 +44,7 @@ Last verified: 2025-12-09
     - `api.request_account_deletion()`:
       - Resolves the current account via `auth.jwt_account_id()`.
       - Calls `accounts.kickoff_account_deletion(...)`.
-      - Returns `{ "success": true }` or raises a structured exception on validation failures.
+      - Returns `{ "status": "succeeded" }` or raises a structured exception on validation failures.
 
 - Supervisor behavior:
   - `accounts.account_deletion_supervisor(payload jsonb)`:

@@ -25,6 +25,8 @@ grant usage on schema learning to worker_service_user;
 
 -- tables
 
+-- lookup supervision trees
+
 create table if not exists files.file_deletion_task (
     file_deletion_task_id bigserial primary key,
     file_id bigint not null unique references files.file(file_id) on delete cascade,
@@ -325,6 +327,7 @@ declare
     _base_delay_seconds integer := 10;
     _next_check_at timestamptz;
 begin
+    -- only take in the task id and look up the file id instead of having it in the payload
     if _file_deletion_task_id is null then
         return jsonb_build_object(
             'success', false,

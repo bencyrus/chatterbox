@@ -32,13 +32,13 @@ func (c *Client) Close() error {
 }
 
 // DequeueNextTask calls queues.dequeue_next_available_task() to get the next available task
+// The function acquires a 5-minute lease on the task; if not completed before expiry, the task becomes available again
 func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 	var task types.Task
 	var taskID sql.NullInt64
 	var taskType sql.NullString
 	var payloadBytes []byte
 	var enqueuedAt, scheduledAt sql.NullTime
-	var dequeuedAt sql.NullTime
 
 	query := `select * from queues.dequeue_next_available_task()`
 	row := c.db.QueryRowContext(ctx, query)
@@ -49,7 +49,6 @@ func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 		&payloadBytes,
 		&enqueuedAt,
 		&scheduledAt,
-		&dequeuedAt,
 	)
 
 	if err != nil {
@@ -77,15 +76,32 @@ func (c *Client) DequeueNextTask(ctx context.Context) (*types.Task, error) {
 	if scheduledAt.Valid {
 		task.ScheduledAt = scheduledAt.Time
 	}
-	if dequeuedAt.Valid {
-		task.DequeuedAt = &dequeuedAt.Time
-	}
 
 	return &task, nil
 }
 
+// CompleteTask marks a task as completed so it won't be processed again
+func (c *Client) CompleteTask(ctx context.Context, taskID int64) error {
+	query := `select queues.complete_task($1)`
+	_, err := c.db.ExecContext(ctx, query, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to complete task: %w", err)
+	}
+	return nil
+}
+
+// FailTask records a task failure with an error message for observability
+func (c *Client) FailTask(ctx context.Context, taskID int64, errorMessage string) error {
+	query := `select queues.fail_task($1, $2)`
+	_, err := c.db.ExecContext(ctx, query, taskID, errorMessage)
+	if err != nil {
+		return fmt.Errorf("failed to record task failure: %w", err)
+	}
+	return nil
+}
+
 // RunFunction calls internal.run_function(function_name, payload) and returns the parsed result
-// in DBFunctionResult (success, error, validation_failure_message, payload).
+// in DBFunctionResult (status, payload). Status "succeeded" indicates success.
 func (c *Client) RunFunction(ctx context.Context, functionName string, payload json.RawMessage) (*types.DBFunctionResult, error) {
 	var resultJSON json.RawMessage
 
@@ -99,15 +115,4 @@ func (c *Client) RunFunction(ctx context.Context, functionName string, payload j
 		return nil, fmt.Errorf("failed to unmarshal function result: %w", err)
 	}
 	return &result, nil
-}
-
-// AppendError calls queues.append_error(task_id, error_message) to record an error
-func (c *Client) AppendError(ctx context.Context, taskID int64, errorMessage string) error {
-	query := `select queues.append_error($1, $2)`
-	var result json.RawMessage
-	err := c.db.QueryRowContext(ctx, query, taskID, errorMessage).Scan(&result)
-	if err != nil {
-		return fmt.Errorf("failed to append error: %w", err)
-	}
-	return nil
 }

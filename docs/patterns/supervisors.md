@@ -41,20 +41,20 @@ A well-designed supervisor should be so simple that you can read it and immediat
 
 ```sql
 create or replace function comms.send_email_supervisor(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _task_id bigint := (payload->>'send_email_task_id')::bigint;
+    _task_id bigint := (_payload->>'send_email_task_id')::bigint;
     _facts record;
     _max_attempts integer := 2;
 begin
     -- 1. VALIDATION
     if _task_id is null then
-        return jsonb_build_object('error', 'missing_task_id');
+        return jsonb_build_object('status', 'missing_send_email_task_id');
     end if;
 
     -- 2. LOCK (prevent concurrent runs from double-scheduling)
@@ -78,7 +78,7 @@ begin
     end if;
 
     -- Schedule new attempt if none outstanding
-    if _facts.num_scheduled = _facts.num_failures then
+    if _facts.num_attempts = _facts.num_failures then
         perform comms.schedule_email_attempt(_task_id);
     end if;
 
@@ -102,13 +102,39 @@ With the facts function pattern:
 
 For full details on facts functions, see [Facts, Logic, Effects](./facts-logic-effects.md).
 
+### Worker crash resilience
+
+Supervisors are designed to survive worker crashes. The queue uses a lease-based model: when a worker dequeues a task, it acquires a time-limited lease (default 5 minutes). If the worker completes successfully, it marks the task as completed. If the worker crashes mid-processing, the lease expires and the task becomes available again.
+
+This works because supervisors are **idempotent by design**:
+
+1. **Facts reflect reality**: The supervisor reads current state from the database, not from the payload. If the worker crashed after scheduling an attempt but before recording success, the attempt row exists and the supervisor sees it.
+
+2. **Guards prevent double-work**: The `num_attempts = num_failures` guard ensures we only schedule a new attempt when the previous one has a recorded outcome. An in-flight attempt (no success or failure yet) blocks new attempts.
+
+3. **Terminal checks come first**: Even if a supervisor runs twice due to a crash and retry, the first thing it checks is whether we've already succeeded or exhausted retries.
+
+The sequence after a crash:
+
+1. Worker A dequeues supervisor task, acquires 5-minute lease
+2. Supervisor schedules an email attempt, re-enqueues itself
+3. Worker A crashes before marking the task completed
+4. 5 minutes pass, lease expires
+5. Worker B dequeues the same supervisor task
+6. Supervisor reads facts: sees the attempt exists (no success/failure yet)
+7. Supervisor skips scheduling (outstanding attempt) and re-enqueues itself
+8. Eventually the email task completes and records success/failure
+9. Next supervisor run sees the outcome and proceeds accordingly
+
+No special crash-handling code is needed in the supervisor itself. The combination of lease-based dequeuing and fact-based decisions makes crashes a non-event.
+
 ### The no-SQL-in-body principle
 
 For supervisors especially, avoid raw SQL in the function body:
 
 ```sql
 -- BAD: inline SQL obscures the business logic
-if (select count(*) from send_email_task_failed where task_id = _id) >= _max then
+if (select count(*) from send_email_attempt_failed where task_id = _id) >= _max then
     ...
 end if;
 ```
@@ -139,15 +165,18 @@ create or replace function comms.schedule_email_attempt(
 returns void
 language plpgsql
 as $$
+declare
+    _send_email_attempt_id bigint;
 begin
-    insert into comms.send_email_task_scheduled (send_email_task_id)
-    values (_send_email_task_id);
+    insert into comms.send_email_attempt (send_email_task_id)
+    values (_send_email_task_id)
+    returning send_email_attempt_id into _send_email_attempt_id;
 
     perform queues.enqueue(
         'email',
         jsonb_build_object(
             'task_type', 'email',
-            'send_email_task_id', _send_email_task_id,
+            'send_email_attempt_id', _send_email_attempt_id,
             'before_handler', 'comms.get_email_payload',
             'success_handler', 'comms.record_email_success',
             'error_handler', 'comms.record_email_failure'
@@ -298,9 +327,13 @@ When a supervisor misbehaves:
 
 4. **Inspect fact tables directly** if needed:
    ```sql
-   select * from comms.send_email_task_scheduled where send_email_task_id = 12345;
-   select * from comms.send_email_task_failed where send_email_task_id = 12345;
-   select * from comms.send_email_task_succeeded where send_email_task_id = 12345;
+   select * from comms.send_email_attempt where send_email_task_id = 12345;
+   select * from comms.send_email_attempt_failed f
+   join comms.send_email_attempt a on a.send_email_attempt_id = f.send_email_attempt_id
+   where a.send_email_task_id = 12345;
+   select * from comms.send_email_attempt_succeeded s
+   join comms.send_email_attempt a on a.send_email_attempt_id = s.send_email_attempt_id
+   where a.send_email_task_id = 12345;
    ```
 
 5. **Re-run the supervisor** if the issue was transient or you've fixed the data
@@ -323,7 +356,7 @@ end if;
 
 ```sql
 -- Only schedule if no outstanding attempt
-if _facts.num_scheduled = _facts.num_failures then
+if _facts.num_attempts = _facts.num_failures then
     perform schedule_attempt(...);
 end if;
 ```
@@ -414,7 +447,7 @@ We create a "send email" task and ask the supervisor to shepherd it. The first r
 - [ ] No raw SELECT/INSERT/UPDATE in the supervisor body
 - [ ] Effects extracted to named functions
 - [ ] Terminal states checked first (success, max attempts)
-- [ ] Double-scheduling guarded with scheduled vs failed count
+- [ ] Double-scheduling guarded with attempts vs failures count
 - [ ] Supervisor always re-enqueues itself unless terminal
 - [ ] Run count protection to prevent infinite loops
 - [ ] FOR UPDATE lock acquired before reading facts

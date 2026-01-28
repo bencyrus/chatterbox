@@ -42,6 +42,7 @@ Last verified: 2025-10-08
 - Prefer using `_r.field` directly instead of copying into separate variables unless transformations warrant it.
 - Avoid calling functions with side effects in `declare`; perform side effects in the `begin...end` block. Pure getters may be called in `declare`.
 - Rely on getters to normalize inputs; avoid pre-normalizing in callers when getters already handle it.
+- Avoid `returns record` — it requires verbose `select ... from func() as (col type, ...)` syntax. Use OUT parameters instead to enable direct assignment.
 
 ### See also
 

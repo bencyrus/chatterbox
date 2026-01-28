@@ -93,16 +93,18 @@ A facts function:
 
 ```sql
 create or replace function comms.send_email_supervisor_facts(
-    _send_email_task_id bigint
+    _send_email_task_id bigint,
+    out has_success boolean,
+    out num_failures integer,
+    out num_attempts integer
 )
-returns record
 language sql
 stable
 as $$
     select
-        comms.has_send_email_task_succeeded(_send_email_task_id) as has_success,
-        comms.count_send_email_task_failures(_send_email_task_id) as num_failures,
-        comms.count_send_email_task_scheduled(_send_email_task_id) as num_scheduled;
+        comms.has_send_email_succeeded_attempt(_send_email_task_id),
+        comms.count_send_email_failed_attempts(_send_email_task_id),
+        comms.count_send_email_attempts(_send_email_task_id);
 $$;
 ```
 
@@ -112,28 +114,32 @@ If you don't need the individual helpers elsewhere, you can write the queries di
 
 ```sql
 create or replace function comms.send_email_supervisor_facts(
-    _send_email_task_id bigint
+    _send_email_task_id bigint,
+    out has_success boolean,
+    out num_failures integer,
+    out num_attempts integer
 )
-returns record
 language sql
 stable
 as $$
     select
         exists (
             select 1
-            from comms.send_email_task_succeeded s
-            where s.send_email_task_id = _send_email_task_id
-        ) as has_success,
+            from comms.send_email_attempt a
+            join comms.send_email_attempt_succeeded s on s.send_email_attempt_id = a.send_email_attempt_id
+            where a.send_email_task_id = _send_email_task_id
+        ),
         (
             select count(*)::integer
-            from comms.send_email_task_failed f
-            where f.send_email_task_id = _send_email_task_id
-        ) as num_failures,
+            from comms.send_email_attempt a
+            join comms.send_email_attempt_failed f on f.send_email_attempt_id = a.send_email_attempt_id
+            where a.send_email_task_id = _send_email_task_id
+        ),
         (
             select count(*)::integer
-            from comms.send_email_task_scheduled s
-            where s.send_email_task_id = _send_email_task_id
-        ) as num_scheduled;
+            from comms.send_email_attempt a
+            where a.send_email_task_id = _send_email_task_id
+        );
 $$;
 ```
 
@@ -141,6 +147,8 @@ Both approaches work:
 
 - **Inline queries**: Use when the facts are specific to one function. Simpler, fewer steps to understand the query.
 - **Helper functions**: Use when individual facts are reused elsewhere, or when you want each fact callable independently for debugging.
+
+Using OUT parameters enables direct assignment: `_facts := comms.send_email_supervisor_facts(_id);`
 
 ### Usage in the calling function
 
@@ -168,20 +176,20 @@ With facts extracted, the main function becomes pure orchestration:
 
 ```sql
 create or replace function comms.send_email_supervisor(
-    payload jsonb
+    _payload jsonb
 )
 returns jsonb
 language plpgsql
 security definer
 as $$
 declare
-    _send_email_task_id bigint := (payload->>'send_email_task_id')::bigint;
+    _send_email_task_id bigint := (_payload->>'send_email_task_id')::bigint;
     _facts record;
     _max_attempts integer := 2;
 begin
     -- VALIDATION
     if _send_email_task_id is null then
-        return jsonb_build_object('error', 'missing_send_email_task_id');
+        return jsonb_build_object('status', 'missing_send_email_task_id');
     end if;
 
     -- FACTS
@@ -196,7 +204,7 @@ begin
         return jsonb_build_object('status', 'max_attempts_reached');
     end if;
 
-    if _facts.num_scheduled = _facts.num_failures then
+    if _facts.num_attempts = _facts.num_failures then
         perform comms.schedule_email_attempt(_send_email_task_id);
     end if;
 
@@ -227,7 +235,9 @@ You see exactly what the function would see. No side effects. Compare against ex
 
 ```sql
 -- Set up test data
-insert into comms.send_email_task_failed (...);
+insert into comms.send_email_attempt (send_email_task_id) values (_task_id);
+insert into comms.send_email_attempt_failed (send_email_attempt_id, error_message)
+values (currval('comms.send_email_attempt_send_email_attempt_id_seq'), 'test error');
 
 -- Verify facts before running supervisor
 select comms.send_email_supervisor_facts(_task_id);
@@ -241,7 +251,7 @@ select comms.send_email_supervisor_facts(_task_id);
 Just as facts are extracted, effects should be too:
 
 ```sql
--- Effect: record a scheduled attempt
+-- Effect: schedule an email send attempt
 create or replace function comms.schedule_email_attempt(
     _send_email_task_id bigint
 )
@@ -249,15 +259,18 @@ returns void
 language plpgsql
 security definer
 as $$
+declare
+    _send_email_attempt_id bigint;
 begin
-    insert into comms.send_email_task_scheduled (send_email_task_id)
-    values (_send_email_task_id);
+    insert into comms.send_email_attempt (send_email_task_id)
+    values (_send_email_task_id)
+    returning send_email_attempt_id into _send_email_attempt_id;
 
     perform queues.enqueue(
         'email',
         jsonb_build_object(
             'task_type', 'email',
-            'send_email_task_id', _send_email_task_id,
+            'send_email_attempt_id', _send_email_attempt_id,
             'before_handler', 'comms.get_email_payload',
             'success_handler', 'comms.record_email_success',
             'error_handler', 'comms.record_email_failure'

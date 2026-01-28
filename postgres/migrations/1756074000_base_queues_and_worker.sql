@@ -10,14 +10,27 @@ grant usage on schema internal to worker_service_user;
 create domain queues.task_type as text
     check (value in ('db_function', 'email', 'sms'));
 
--- queues.task: unit of work with payload and scheduling
+-- queues.task: unit of work with payload and scheduling (immutable after creation)
 create table queues.task (
     task_id bigserial primary key,
     task_type queues.task_type not null,
     payload jsonb not null,
     enqueued_at timestamp with time zone not null default now(),
-    scheduled_at timestamp with time zone not null default now(),
-    dequeued_at timestamp with time zone
+    scheduled_at timestamp with time zone not null default now()
+);
+
+-- queues.task_lease: append-only record of task claim attempts with expiry
+create table queues.task_lease (
+    task_lease_id bigserial primary key,
+    task_id bigint not null references queues.task(task_id) on delete cascade,
+    leased_at timestamp with time zone not null default now(),
+    expires_at timestamp with time zone not null
+);
+
+-- queues.task_completed: terminal state for completed tasks (one per task)
+create table queues.task_completed (
+    task_id bigint primary key references queues.task(task_id) on delete cascade,
+    completed_at timestamp with time zone not null default now()
 );
 
 -- queues.error: append-only worker/handler errors for observability
@@ -48,51 +61,72 @@ begin
 end;
 $$;
 
--- dequeue and claim the next available task (sets dequeued_at)
+-- dequeue and claim the next available task with a time-limited lease
+-- task is available when: not completed AND no active lease (expires_at > now())
+-- if worker crashes, lease expires and task becomes available again
 create or replace function queues.dequeue_next_available_task()
 returns queues.task
 language plpgsql
 security definer
 as $$
 declare
-    _claimed_task queues.task;
+    _task queues.task;
+    _lease_duration interval := interval '5 minutes';
 begin
-    with candidate as (
-        select t.task_id
-        from queues.task t
-        where t.dequeued_at is null
-          and t.scheduled_at <= now()
-        order by t.scheduled_at, t.task_id
-        limit 1
-        for update skip locked
+    -- find and lock an available task
+    select t.* into _task
+    from queues.task t
+    where not exists (
+        select 1 from queues.task_completed c
+        where c.task_id = t.task_id
     )
-    update queues.task t
-    set dequeued_at = now()
-    from candidate c
-    where t.task_id = c.task_id
-    returning t.*
-    into _claimed_task;
+    and not exists (
+        select 1 from queues.task_lease l
+        where l.task_id = t.task_id
+        and l.expires_at > now()
+    )
+    and t.scheduled_at <= now()
+    order by t.scheduled_at, t.task_id
+    limit 1
+    for update skip locked;
 
-    return _claimed_task;
+    if _task.task_id is null then
+        return null;
+    end if;
+
+    -- append a lease record
+    insert into queues.task_lease (task_id, expires_at)
+    values (_task.task_id, now() + _lease_duration);
+
+    return _task;
 end;
 $$;
 
--- helper to append an error row
-create or replace function queues.append_error(
-    task_id bigint,
-    error_message text
+-- mark a task as completed (idempotent)
+create or replace function queues.complete_task(_task_id bigint)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+    insert into queues.task_completed (task_id)
+    values (_task_id)
+    on conflict (task_id) do nothing;
+end;
+$$;
+
+-- record a task failure with error message (for observability; does not mark terminal)
+create or replace function queues.fail_task(
+    _task_id bigint,
+    _error_message text
 )
-returns jsonb
+returns void
 language plpgsql
 security definer
 as $$
 begin
     insert into queues.error (task_id, error_message)
-    values ($1, coalesce($2, ''));
-
-    return jsonb_build_object(
-        'success', true
-    );
+    values (_task_id, coalesce(_error_message, ''));
 end;
 $$;
 
@@ -118,5 +152,6 @@ $$;
 
 -- minimal grants for worker
 grant execute on function queues.dequeue_next_available_task() to worker_service_user;
+grant execute on function queues.complete_task(bigint) to worker_service_user;
+grant execute on function queues.fail_task(bigint, text) to worker_service_user;
 grant execute on function internal.run_function(text, jsonb) to worker_service_user;
-grant execute on function queues.append_error(bigint, text) to worker_service_user;

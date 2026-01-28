@@ -40,18 +40,15 @@ func (p *DBFunctionProcessor) Process(ctx context.Context, task *types.Task) *ty
 	if err != nil {
 		return types.NewTaskFailure(fmt.Errorf("failed to execute database function %s: %w", payload.DBFunction, err))
 	}
-	if result.Error != "" {
-		return types.NewTaskFailure(fmt.Errorf("database function %s returned error: %s", payload.DBFunction, result.Error))
-	}
-	if result.ValidationFailureMessage != "" {
-		// Not a fatal error; let the worker append error and continue
-		logger.Warn(ctx, "database function returned validation failure", logger.Fields{
-			"task_id":          task.TaskID,
-			"function":         payload.DBFunction,
-			"validation_error": result.ValidationFailureMessage,
+	if !result.IsSuccess() {
+		// Non-succeeded status is logged but not treated as fatal - the supervisor pattern
+		// uses status values to communicate outcomes without raising errors
+		logger.Info(ctx, "database function returned non-success status", logger.Fields{
+			"task_id":  task.TaskID,
+			"function": payload.DBFunction,
+			"status":   result.Status,
 		})
-		return types.NewTaskSuccess(map[string]any{"validation_failure": result.ValidationFailureMessage})
 	}
 
-	return types.NewTaskSuccess(map[string]any{"success": true})
+	return types.NewTaskSuccess(map[string]any{"status": result.Status})
 }

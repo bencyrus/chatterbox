@@ -110,10 +110,19 @@ func (w *Worker) Run(ctx context.Context) error {
 					"task_id":   task.TaskID,
 					"task_type": task.TaskType,
 				})
-				if appendErr := w.db.AppendError(ctx, task.TaskID, err.Error()); appendErr != nil {
-					logger.Error(ctx, "failed to append error to database", appendErr)
+				if failErr := w.db.FailTask(ctx, task.TaskID, err.Error()); failErr != nil {
+					logger.Error(ctx, "failed to record task failure", failErr)
 				}
-				// do not emit to errCh; continue processing
+			}
+
+			// Always complete the task after processing (success or failure).
+			// Retries are handled by supervisors creating new attempts, not by re-processing
+			// the same queue task. Lease expiry is only for crash recovery (worker dies
+			// mid-processing before reaching this point).
+			if err := w.db.CompleteTask(ctx, task.TaskID); err != nil {
+				logger.Error(ctx, "failed to complete task", err, logger.Fields{
+					"task_id": task.TaskID,
+				})
 			}
 		}
 	}

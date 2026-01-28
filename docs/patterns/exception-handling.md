@@ -195,7 +195,7 @@ declare
 begin
     perform billing.append_invoice_failure(_invoice_id, _error_message);
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 ```
@@ -228,7 +228,7 @@ begin
         -- The worker thinks the task succeeded (no exception reached it)
         -- The error handler is never called
         -- The supervisor never knows to retry
-        return jsonb_build_object('status', 'error', 'message', sqlerrm);
+        return jsonb_build_object('status', 'failed', 'message', sqlerrm);
     end;
 end;
 $$;
@@ -253,11 +253,11 @@ declare
 begin
     -- Validate inputs explicitly
     if _email is null or _email = '' then
-        return jsonb_build_object('error', 'email_required');
+        return jsonb_build_object('status', 'email_required');
     end if;
 
     if not _email ~ '^.+@.+\..+$' then
-        return jsonb_build_object('error', 'invalid_email_format');
+        return jsonb_build_object('status', 'invalid_email_format');
     end if;
 
     -- Happy path continues...
@@ -274,7 +274,7 @@ begin
         raise exception 'email required';
     end if;
 exception when others then
-    return jsonb_build_object('error', sqlerrm);
+    return jsonb_build_object('status', sqlerrm);
 end;
 ```
 
@@ -284,9 +284,9 @@ Use `raise exception` to assert invariants, which are conditions that should nev
 
 ```sql
 -- GOOD: asserting an invariant
-if _facts.num_scheduled < _facts.num_failures then
-    raise exception 'Invariant violation: scheduled (%) < failures (%)',
-        _facts.num_scheduled, _facts.num_failures
+if _facts.num_attempts < _facts.num_failures then
+    raise exception 'Invariant violation: attempts (%) < failures (%)',
+        _facts.num_attempts, _facts.num_failures
         using hint = 'This indicates a bug in scheduling logic';
 end if;
 ```
