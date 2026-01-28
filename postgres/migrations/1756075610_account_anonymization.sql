@@ -40,7 +40,7 @@ begin
     values (_account_id, 'anonymized')
     on conflict (account_id, flag) do nothing;
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
@@ -253,15 +253,13 @@ declare
 begin
     if _account_anonymization_task_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_account_anonymization_task_id'
+            'status', 'missing_account_anonymization_task_id'
         );
     end if;
 
     if _account_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_account_id'
+            'status', 'missing_account_id'
         );
     end if;
 
@@ -275,7 +273,7 @@ begin
     into _has_success;
 
     if _has_success then
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     -- check if account already has the anonymized flag
@@ -284,14 +282,14 @@ begin
         values (_account_anonymization_task_id)
         on conflict (account_anonymization_task_id) do nothing;
 
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     select accounts.count_account_anonymization_task_failures(_account_anonymization_task_id)
     into _num_failures;
 
     if _num_failures >= _max_attempts then
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     select accounts.count_account_anonymization_task_scheduled(_account_anonymization_task_id)
@@ -330,7 +328,7 @@ begin
         _next_check_at
     );
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 

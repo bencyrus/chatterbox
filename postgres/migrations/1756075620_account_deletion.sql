@@ -115,15 +115,13 @@ begin
     -- validation
     if _account_deletion_task_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_account_deletion_task_id'
+            'status', 'missing_account_deletion_task_id'
         );
     end if;
 
     if _account_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_account_id'
+            'status', 'missing_account_id'
         );
     end if;
 
@@ -139,7 +137,7 @@ begin
 
     if _has_success then
         return jsonb_build_object(
-            'success', true
+            'status', 'succeeded'
         );
     end if;
 
@@ -149,7 +147,7 @@ begin
     if _num_failures >= _max_attempts then
         -- give up after bounded attempts
         return jsonb_build_object(
-            'success', true
+            'status', 'succeeded'
         );
     end if;
 
@@ -187,7 +185,7 @@ begin
                 'one or more file deletions permanently failed'
             );
 
-            return jsonb_build_object('success', true);
+            return jsonb_build_object('status', 'succeeded');
         end if;
 
         -- files pending but not stuck: kick off file deletion supervisors
@@ -216,7 +214,7 @@ begin
             _next_check_at
         );
 
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     -- phase 2: ensure account is anonymized (only after all files are deleted)
@@ -235,7 +233,7 @@ begin
                 'account anonymization permanently failed'
             );
 
-            return jsonb_build_object('success', true);
+            return jsonb_build_object('status', 'succeeded');
         end if;
 
         -- anonymization pending but not stuck: kick off account anonymization supervisor
@@ -258,7 +256,7 @@ begin
             _next_check_at
         );
 
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     -- phase 3: all done - mark as succeeded
@@ -266,7 +264,7 @@ begin
     values (_account_deletion_task_id)
     on conflict (account_deletion_task_id) do nothing;
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 

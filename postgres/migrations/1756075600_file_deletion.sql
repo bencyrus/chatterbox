@@ -144,8 +144,7 @@ declare
 begin
     if _file_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_file_id'
+            'status', 'missing_file_id'
         );
     end if;
 
@@ -158,13 +157,12 @@ begin
 
     if not found then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'file_not_found_for_deletion'
+            'status', 'file_not_found_for_deletion'
         );
     end if;
 
     return jsonb_build_object(
-        'success', true,
+        'status', 'succeeded',
         'payload', jsonb_build_object(
             'file_id', _file_record.file_id
         )
@@ -195,7 +193,7 @@ declare
 begin
     if _file_id is null then
         return jsonb_build_object(
-            'error', 'missing_file_id'
+            'status', 'missing_file_id'
         );
     end if;
 
@@ -209,7 +207,7 @@ begin
     end if;
 
     return jsonb_build_object(
-        'success', true
+        'status', 'succeeded'
     );
 end;
 $$;
@@ -233,7 +231,7 @@ declare
 begin
     if _file_deletion_task_id is null then
         return jsonb_build_object(
-            'error', 'missing_file_deletion_task_id'
+            'status', 'missing_file_deletion_task_id'
         );
     end if;
 
@@ -241,7 +239,7 @@ begin
     values (_file_deletion_task_id, _error_message);
 
     return jsonb_build_object(
-        'success', true
+        'status', 'succeeded'
     );
 end;
 $$;
@@ -331,15 +329,13 @@ begin
     -- only take in the task id and look up the file id instead of having it in the payload
     if _file_deletion_task_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_file_deletion_task_id'
+            'status', 'missing_file_deletion_task_id'
         );
     end if;
 
     if _file_id is null then
         return jsonb_build_object(
-            'success', false,
-            'validation_failure_message', 'missing_file_id'
+            'status', 'missing_file_id'
         );
     end if;
 
@@ -353,7 +349,7 @@ begin
     into _has_success;
 
     if _has_success then
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     -- if file already marked deleted, mark supervisor success
@@ -362,14 +358,14 @@ begin
         values (_file_deletion_task_id)
         on conflict (file_deletion_task_id) do nothing;
 
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     select files.count_file_deletion_task_failures(_file_deletion_task_id)
     into _num_failures;
 
     if _num_failures >= _max_attempts then
-        return jsonb_build_object('success', true);
+        return jsonb_build_object('status', 'succeeded');
     end if;
 
     select files.count_file_deletion_task_scheduled(_file_deletion_task_id)
@@ -412,7 +408,7 @@ begin
         _next_check_at
     );
 
-    return jsonb_build_object('success', true);
+    return jsonb_build_object('status', 'succeeded');
 end;
 $$;
 
