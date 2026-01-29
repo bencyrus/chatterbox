@@ -29,7 +29,7 @@ $$;
 -- account anonymization process: task and attempts (append-only)
 create table accounts.account_anonymization_task (
     account_anonymization_task_id bigserial primary key,
-    account_id bigint not null unique references accounts.account(account_id) on delete cascade,
+    account_id bigint not null references accounts.account(account_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
@@ -57,7 +57,9 @@ create table accounts.account_anonymization_attempt_failed (
 -- fact helpers
 -- =============================================================================
 
--- facts: has an anonymization task for this account?
+-- facts: has an in-progress anonymization task for this account?
+-- "in-progress" means: a task exists for this account with no success yet and
+-- it has not yet reached the max failure threshold.
 create or replace function accounts.has_account_anonymization_task(
     _account_id bigint
 )
@@ -69,6 +71,20 @@ as $$
         select 1
         from accounts.account_anonymization_task aat
         where aat.account_id = _account_id
+          and not exists (
+              select 1
+              from accounts.account_anonymization_attempt a
+              join accounts.account_anonymization_attempt_succeeded s
+                on s.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+              where a.account_anonymization_task_id = aat.account_anonymization_task_id
+          )
+          and (
+              select count(*)
+              from accounts.account_anonymization_attempt a
+              join accounts.account_anonymization_attempt_failed f
+                on f.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+              where a.account_anonymization_task_id = aat.account_anonymization_task_id
+          ) < 3
     );
 $$;
 
@@ -466,14 +482,34 @@ $$;
 create or replace function accounts.kickoff_account_anonymization_facts(
     _account_id bigint,
     out account_exists boolean,
-    out has_existing_task boolean
+    out in_progress_task_id bigint
 )
 language sql
 stable
 as $$
     select
         exists (select 1 from accounts.account a where a.account_id = _account_id),
-        accounts.has_account_anonymization_task(_account_id);
+        (
+            select t.account_anonymization_task_id
+            from accounts.account_anonymization_task t
+            where t.account_id = _account_id
+              and not exists (
+                  select 1
+                  from accounts.account_anonymization_attempt a
+                  join accounts.account_anonymization_attempt_succeeded s
+                    on s.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+                  where a.account_anonymization_task_id = t.account_anonymization_task_id
+              )
+              and (
+                  select count(*)
+                  from accounts.account_anonymization_attempt a
+                  join accounts.account_anonymization_attempt_failed f
+                    on f.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+                  where a.account_anonymization_task_id = t.account_anonymization_task_id
+              ) < 3
+            order by t.created_at desc
+            limit 1
+        );
 $$;
 
 -- effect: create task and enqueue supervisor
@@ -532,7 +568,7 @@ begin
         return;
     end if;
 
-    if _facts.has_existing_task then
+    if _facts.in_progress_task_id is not null then
         return; -- already kicked off, nothing to do
     end if;
 

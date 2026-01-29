@@ -23,7 +23,7 @@ grant usage on schema learning to worker_service_user;
 -- file deletion process: task and attempts (append-only)
 create table files.file_deletion_task (
     file_deletion_task_id bigserial primary key,
-    file_id bigint not null unique references files.file(file_id) on delete cascade,
+    file_id bigint not null references files.file(file_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
@@ -51,7 +51,9 @@ create table files.file_deletion_attempt_failed (
 -- fact helpers
 -- =============================================================================
 
--- facts: has a file deletion task for this file?
+-- facts: has an in-progress file deletion task for this file?
+-- "in-progress" means: latest deletion task for this file has not succeeded
+-- and has not yet reached the max failure threshold.
 create or replace function files.has_file_deletion_task(
     _file_id bigint
 )
@@ -63,6 +65,20 @@ as $$
         select 1
         from files.file_deletion_task fdt
         where fdt.file_id = _file_id
+          and not exists (
+              select 1
+              from files.file_deletion_attempt a
+              join files.file_deletion_attempt_succeeded s
+                on s.file_deletion_attempt_id = a.file_deletion_attempt_id
+              where a.file_deletion_task_id = fdt.file_deletion_task_id
+          )
+          and (
+              select count(*)
+              from files.file_deletion_attempt a
+              join files.file_deletion_attempt_failed f
+                on f.file_deletion_attempt_id = a.file_deletion_attempt_id
+              where a.file_deletion_task_id = fdt.file_deletion_task_id
+          ) < 3
     );
 $$;
 
@@ -391,7 +407,7 @@ $$;
 create or replace function files.kickoff_file_deletion_facts(
     _file_id bigint,
     out file_exists boolean,
-    out has_existing_task boolean
+    out has_in_progress_task boolean
 )
 language sql
 stable
@@ -457,7 +473,7 @@ begin
         return;
     end if;
 
-    if _facts.has_existing_task then
+    if _facts.has_in_progress_task then
         return; -- already kicked off, nothing to do
     end if;
 

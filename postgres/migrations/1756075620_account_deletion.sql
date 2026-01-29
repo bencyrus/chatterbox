@@ -11,8 +11,7 @@
 create table accounts.account_deletion_task (
     account_deletion_task_id bigserial primary key,
     account_id bigint not null,
-    created_at timestamp with time zone not null default now(),
-    constraint account_deletion_task_unique_account unique (account_id)
+    created_at timestamp with time zone not null default now()
 );
 
 -- attempts (append-only, one per supervisor scheduling cycle)
@@ -39,7 +38,10 @@ create table accounts.account_deletion_attempt_failed (
 -- fact helpers
 -- =============================================================================
 
--- facts: has an account deletion task for this account?
+-- facts: has an in-progress account deletion task for this account?
+-- "in-progress" means: a task exists for this account AND it has no terminal fact yet
+-- (no attempt_succeeded row and no attempt_failed row). This prevents concurrent
+-- deletion supervisors while still allowing multiple deletion tasks over time.
 create or replace function accounts.has_account_deletion_task(
     _account_id bigint
 )
@@ -51,7 +53,55 @@ as $$
         select 1
         from accounts.account_deletion_task adt
         where adt.account_id = _account_id
+          and not exists (
+              select 1
+              from accounts.account_deletion_attempt a
+              join accounts.account_deletion_attempt_succeeded s
+                on s.account_deletion_attempt_id = a.account_deletion_attempt_id
+              where a.account_deletion_task_id = adt.account_deletion_task_id
+          )
+          and not exists (
+              select 1
+              from accounts.account_deletion_attempt a
+              join accounts.account_deletion_attempt_failed f
+                on f.account_deletion_attempt_id = a.account_deletion_attempt_id
+              where a.account_deletion_task_id = adt.account_deletion_task_id
+          )
     );
+$$;
+
+-- facts: for kickoff_account_deletion
+create or replace function accounts.kickoff_account_deletion_facts(
+    _account_id bigint,
+    out account_exists boolean,
+    out in_progress_task_id bigint
+)
+language sql
+stable
+as $$
+    select
+        exists (select 1 from accounts.account a where a.account_id = _account_id),
+        (
+            select t.account_deletion_task_id
+            from accounts.account_deletion_task t
+            where t.account_id = _account_id
+              and not exists (
+                  select 1
+                  from accounts.account_deletion_attempt a
+                  join accounts.account_deletion_attempt_succeeded s
+                    on s.account_deletion_attempt_id = a.account_deletion_attempt_id
+                  where a.account_deletion_task_id = t.account_deletion_task_id
+              )
+              and not exists (
+                  select 1
+                  from accounts.account_deletion_attempt a
+                  join accounts.account_deletion_attempt_failed f
+                    on f.account_deletion_attempt_id = a.account_deletion_attempt_id
+                  where a.account_deletion_task_id = t.account_deletion_task_id
+              )
+            order by t.created_at desc
+            limit 1
+        );
 $$;
 
 -- facts: has a succeeded attempt for account_deletion_task?
@@ -124,19 +174,27 @@ stable
 as $$
     select exists (
         select 1
-        from files.file_deletion_task fdt
-        where fdt.file_id = _file_id
+        from files.file_deletion_task t
+        where t.file_deletion_task_id = (
+            select t2.file_deletion_task_id
+            from files.file_deletion_task t2
+            where t2.file_id = _file_id
+            order by t2.created_at desc
+            limit 1
+        )
           and not exists (
               select 1
               from files.file_deletion_attempt a
-              join files.file_deletion_attempt_succeeded s on s.file_deletion_attempt_id = a.file_deletion_attempt_id
-              where a.file_deletion_task_id = fdt.file_deletion_task_id
+              join files.file_deletion_attempt_succeeded s
+                on s.file_deletion_attempt_id = a.file_deletion_attempt_id
+              where a.file_deletion_task_id = t.file_deletion_task_id
           )
           and (
               select count(*)
               from files.file_deletion_attempt a
-              join files.file_deletion_attempt_failed f on f.file_deletion_attempt_id = a.file_deletion_attempt_id
-              where a.file_deletion_task_id = fdt.file_deletion_task_id
+              join files.file_deletion_attempt_failed f
+                on f.file_deletion_attempt_id = a.file_deletion_attempt_id
+              where a.file_deletion_task_id = t.file_deletion_task_id
           ) >= 3
     );
 $$;
@@ -152,19 +210,27 @@ stable
 as $$
     select exists (
         select 1
-        from accounts.account_anonymization_task aat
-        where aat.account_id = _account_id
+        from accounts.account_anonymization_task t
+        where t.account_anonymization_task_id = (
+            select t2.account_anonymization_task_id
+            from accounts.account_anonymization_task t2
+            where t2.account_id = _account_id
+            order by t2.created_at desc
+            limit 1
+        )
           and not exists (
               select 1
               from accounts.account_anonymization_attempt a
-              join accounts.account_anonymization_attempt_succeeded s on s.account_anonymization_attempt_id = a.account_anonymization_attempt_id
-              where a.account_anonymization_task_id = aat.account_anonymization_task_id
+              join accounts.account_anonymization_attempt_succeeded s
+                on s.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+              where a.account_anonymization_task_id = t.account_anonymization_task_id
           )
           and (
               select count(*)
               from accounts.account_anonymization_attempt a
-              join accounts.account_anonymization_attempt_failed f on f.account_anonymization_attempt_id = a.account_anonymization_attempt_id
-              where a.account_anonymization_task_id = aat.account_anonymization_task_id
+              join accounts.account_anonymization_attempt_failed f
+                on f.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+              where a.account_anonymization_task_id = t.account_anonymization_task_id
           ) >= 3
     );
 $$;
@@ -385,16 +451,8 @@ begin
 
     -- phase 1: file deletion
     if not _facts.all_files_deleted then
-        -- check if any file deletion is stuck
-        if _facts.any_file_stuck then
-            perform accounts.record_account_deletion_failure(
-                _account_deletion_task_id,
-                'one or more file deletions permanently failed'
-            );
-            return jsonb_build_object('status', 'failed');
-        end if;
-
-        -- kick off file deletions for files that don't have tasks yet
+        -- kick off file deletions for files that don't have in-progress tasks yet
+        -- (if previous tasks hit max attempts, this will create a fresh task)
         perform accounts.kickoff_account_file_deletions(_facts.account_id);
 
         -- schedule recheck and exit
@@ -404,21 +462,15 @@ begin
             _run_count
         );
 
+        if _facts.any_file_stuck then
+            return jsonb_build_object('status', 'waiting_for_file_deletions_retrying');
+        end if;
         return jsonb_build_object('status', 'waiting_for_file_deletions');
     end if;
 
     -- phase 2: anonymization
     if not _facts.is_anonymized then
-        -- check if anonymization is stuck
-        if _facts.anonymization_stuck then
-            perform accounts.record_account_deletion_failure(
-                _account_deletion_task_id,
-                'account anonymization permanently failed'
-            );
-            return jsonb_build_object('status', 'failed');
-        end if;
-
-        -- kick off anonymization
+        -- kick off anonymization (if previous tasks hit max attempts, this creates a fresh task)
         perform accounts.kickoff_account_anonymization(_facts.account_id, now());
 
         -- schedule recheck and exit
@@ -428,6 +480,9 @@ begin
             _run_count
         );
 
+        if _facts.anonymization_stuck then
+            return jsonb_build_object('status', 'waiting_for_anonymization_retrying');
+        end if;
         return jsonb_build_object('status', 'waiting_for_anonymization');
     end if;
 
@@ -453,30 +508,29 @@ security definer
 as $$
 declare
     _account_deletion_task_id bigint;
-    _exists boolean;
+    _facts record;
 begin
+    -- 1. VALIDATION
     if _account_id is null then
         validation_failure_message := 'missing_account_id';
         return;
     end if;
 
-    select exists (
-        select 1
-        from accounts.account a
-        where a.account_id = _account_id
-    )
-    into _exists;
+    -- 2. FACTS
+    _facts := accounts.kickoff_account_deletion_facts(_account_id);
 
-    if not _exists then
+    -- 3. LOGIC
+    if not _facts.account_exists then
         validation_failure_message := 'account_not_found';
         return;
     end if;
 
-    -- if task already exists, skip (supervisor already running)
-    if accounts.has_account_deletion_task(_account_id) then
+    -- if there's already an in-progress task, skip (supervisor already running)
+    if _facts.in_progress_task_id is not null then
         return;
     end if;
 
+    -- 4. EFFECTS
     insert into accounts.account_deletion_task (account_id)
     values (_account_id)
     returning account_deletion_task_id

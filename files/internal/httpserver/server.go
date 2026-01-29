@@ -255,7 +255,11 @@ func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "invalid gcs emulator url", http.StatusInternalServerError)
 			return
 		}
-		base.Path = fmt.Sprintf("/storage/v1/b/%s/o/%s", m.Bucket, url.PathEscape(m.ObjectKey))
+		// Important: url.URL.Path should be the *decoded* path, and url.URL.RawPath
+		// (when set) should contain the escaped form. If we put an already-escaped
+		// string into Path, Go will escape '%' again, producing %252F.
+		base.Path = fmt.Sprintf("/storage/v1/b/%s/o/%s", m.Bucket, m.ObjectKey)
+		base.RawPath = fmt.Sprintf("/storage/v1/b/%s/o/%s", m.Bucket, url.PathEscape(m.ObjectKey))
 		deleteURL = base.String()
 	} else {
 		signedURL, err := gcs.SignedDeleteURL(m.Bucket, m.ObjectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
