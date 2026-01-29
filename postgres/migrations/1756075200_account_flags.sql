@@ -24,6 +24,19 @@ as $$
     where af.account_id = _account_id;
 $$;
 
+-- function: add a flag to an account (idempotent)
+create or replace function accounts.add_account_flag(
+    _account_id bigint,
+    _flag accounts.account_flag_type
+)
+returns void
+language sql
+as $$
+    insert into accounts.account_flag (account_id, flag)
+    values (_account_id, _flag)
+    on conflict (account_id, flag) do nothing;
+$$;
+
 -- function: update account_summary to include flags array
 create or replace function accounts.account_summary(
     _account_id bigint

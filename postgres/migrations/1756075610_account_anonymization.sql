@@ -22,54 +22,33 @@ begin
 end;
 $$;
 
--- anonymize account and mark as anonymized (called by worker)
-create or replace function accounts.anonymize_account(
-    _account_id bigint
-)
-returns jsonb
-language plpgsql
-security definer
-as $$
-begin
-    perform accounts.anonymize_account_record(_account_id);
-    -- future: call other domain anonymizers here
-    -- perform messages.anonymize_account_messages(_account_id);
-    -- perform profiles.anonymize_account_profiles(_account_id);
-
-    insert into accounts.account_flag (account_id, flag)
-    values (_account_id, 'anonymized')
-    on conflict (account_id, flag) do nothing;
-
-    return jsonb_build_object('status', 'succeeded');
-end;
-$$;
-
-grant execute on function accounts.anonymize_account(bigint) to worker_service_user;
-
 -- =============================================================================
 -- anonymization task tables
 -- =============================================================================
 
-create table if not exists accounts.account_anonymization_task (
+-- account anonymization process: task and attempts (append-only)
+create table accounts.account_anonymization_task (
     account_anonymization_task_id bigserial primary key,
     account_id bigint not null unique references accounts.account(account_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
-create table if not exists accounts.account_anonymization_task_scheduled (
-    account_anonymization_task_scheduled_id bigserial primary key,
+-- attempts (append-only, one per scheduled attempt)
+create table accounts.account_anonymization_attempt (
+    account_anonymization_attempt_id bigserial primary key,
     account_anonymization_task_id bigint not null references accounts.account_anonymization_task(account_anonymization_task_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
-create table if not exists accounts.account_anonymization_task_succeeded (
-    account_anonymization_task_id bigint primary key references accounts.account_anonymization_task(account_anonymization_task_id) on delete cascade,
+-- attempt succeeded (one per attempt at most)
+create table accounts.account_anonymization_attempt_succeeded (
+    account_anonymization_attempt_id bigint primary key references accounts.account_anonymization_attempt(account_anonymization_attempt_id) on delete cascade,
     created_at timestamp with time zone not null default now()
 );
 
-create table if not exists accounts.account_anonymization_task_failed (
-    account_anonymization_task_failed_id bigserial primary key,
-    account_anonymization_task_id bigint not null references accounts.account_anonymization_task(account_anonymization_task_id) on delete cascade,
+-- attempt failed (one per attempt at most)
+create table accounts.account_anonymization_attempt_failed (
+    account_anonymization_attempt_id bigint primary key references accounts.account_anonymization_attempt(account_anonymization_attempt_id) on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
@@ -78,6 +57,7 @@ create table if not exists accounts.account_anonymization_task_failed (
 -- fact helpers
 -- =============================================================================
 
+-- facts: has an anonymization task for this account?
 create or replace function accounts.has_account_anonymization_task(
     _account_id bigint
 )
@@ -92,7 +72,8 @@ as $$
     );
 $$;
 
-create or replace function accounts.has_account_anonymization_task_succeeded(
+-- facts: has a succeeded attempt for account_anonymization_task?
+create or replace function accounts.has_account_anonymization_succeeded_attempt(
     _account_anonymization_task_id bigint
 )
 returns boolean
@@ -101,12 +82,14 @@ stable
 as $$
     select exists (
         select 1
-        from accounts.account_anonymization_task_succeeded s
-        where s.account_anonymization_task_id = _account_anonymization_task_id
+        from accounts.account_anonymization_attempt a
+        join accounts.account_anonymization_attempt_succeeded s on s.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+        where a.account_anonymization_task_id = _account_anonymization_task_id
     );
 $$;
 
-create or replace function accounts.count_account_anonymization_task_failures(
+-- facts: count failed attempts for account_anonymization_task
+create or replace function accounts.count_account_anonymization_failed_attempts(
     _account_anonymization_task_id bigint
 )
 returns integer
@@ -114,11 +97,13 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from accounts.account_anonymization_task_failed f
-    where f.account_anonymization_task_id = _account_anonymization_task_id;
+    from accounts.account_anonymization_attempt a
+    join accounts.account_anonymization_attempt_failed f on f.account_anonymization_attempt_id = a.account_anonymization_attempt_id
+    where a.account_anonymization_task_id = _account_anonymization_task_id;
 $$;
 
-create or replace function accounts.count_account_anonymization_task_scheduled(
+-- facts: count attempts for account_anonymization_task
+create or replace function accounts.count_account_anonymization_attempts(
     _account_anonymization_task_id bigint
 )
 returns integer
@@ -126,10 +111,11 @@ language sql
 stable
 as $$
     select count(*)::integer
-    from accounts.account_anonymization_task_scheduled s
-    where s.account_anonymization_task_id = _account_anonymization_task_id;
+    from accounts.account_anonymization_attempt a
+    where a.account_anonymization_task_id = _account_anonymization_task_id;
 $$;
 
+-- facts: is account anonymized (via flag)?
 create or replace function accounts.is_account_anonymized(
     _account_id bigint
 )
@@ -145,35 +131,379 @@ as $$
     );
 $$;
 
-create or replace function accounts.is_account_anonymization_stuck(
-    _account_id bigint
+-- facts: aggregated facts for account_anonymization_supervisor
+create or replace function accounts.account_anonymization_supervisor_facts(
+    _account_anonymization_task_id bigint,
+    out is_anonymized boolean,
+    out has_success boolean,
+    out num_failures integer,
+    out num_attempts integer
 )
-returns boolean
 language sql
 stable
 as $$
-    select exists (
-        select 1
-        from accounts.account_anonymization_task aat
-        where aat.account_id = _account_id
-          and not exists (
-              select 1
-              from accounts.account_anonymization_task_succeeded aats
-              where aats.account_anonymization_task_id = aat.account_anonymization_task_id
-          )
-          -- unique constraint on account_id prevents more than 1 task so the max retries
-          -- is what is set in the supervisor function
-          and (
-              select count(*)
-              from accounts.account_anonymization_task_failed aatf
-              where aatf.account_anonymization_task_id = aat.account_anonymization_task_id
-          ) >= 3
+    select
+        (select accounts.is_account_anonymized(t.account_id) from accounts.account_anonymization_task t where t.account_anonymization_task_id = _account_anonymization_task_id),
+        accounts.has_account_anonymization_succeeded_attempt(_account_anonymization_task_id),
+        accounts.count_account_anonymization_failed_attempts(_account_anonymization_task_id),
+        accounts.count_account_anonymization_attempts(_account_anonymization_task_id);
+$$;
+
+-- facts: get anonymization payload facts from attempt_id
+create or replace function accounts.get_anonymization_payload_facts(
+    _account_anonymization_attempt_id bigint,
+    out account_id bigint,
+    out is_anonymized boolean
+)
+language sql
+stable
+as $$
+    select
+        t.account_id,
+        accounts.is_account_anonymized(t.account_id)
+    from accounts.account_anonymization_attempt a
+    join accounts.account_anonymization_task t on t.account_anonymization_task_id = a.account_anonymization_task_id
+    where a.account_anonymization_attempt_id = _account_anonymization_attempt_id;
+$$;
+
+-- =============================================================================
+-- helpers: reusable operations
+-- =============================================================================
+
+-- helper: record attempt succeeded (idempotent)
+create or replace function accounts.record_anonymization_attempt_succeeded(
+    _account_anonymization_attempt_id bigint
+)
+returns void
+language sql
+as $$
+    insert into accounts.account_anonymization_attempt_succeeded (account_anonymization_attempt_id)
+    values (_account_anonymization_attempt_id)
+    on conflict (account_anonymization_attempt_id) do nothing;
+$$;
+
+-- =============================================================================
+-- handlers: before / success / error for anonymization
+-- =============================================================================
+
+-- before handler: build payload from account_anonymization_attempt_id
+create or replace function accounts.get_anonymization_payload(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+as $$
+declare
+    _account_anonymization_attempt_id bigint := (_payload->>'account_anonymization_attempt_id')::bigint;
+    _facts record;
+begin
+    if _account_anonymization_attempt_id is null then
+        return jsonb_build_object('status', 'missing_account_anonymization_attempt_id');
+    end if;
+
+    _facts := accounts.get_anonymization_payload_facts(_account_anonymization_attempt_id);
+
+    if _facts.account_id is null then
+        return jsonb_build_object('status', 'account_anonymization_attempt_not_found');
+    end if;
+
+    -- check if already anonymized
+    if _facts.is_anonymized then
+        return jsonb_build_object('status', 'account_already_anonymized');
+    end if;
+
+    return jsonb_build_object(
+        'status', 'succeeded',
+        'payload', jsonb_build_object(
+            'account_id', _facts.account_id
+        )
     );
+end;
+$$;
+
+-- success handler: record success fact
+-- receives: { original_payload: { account_anonymization_attempt_id, ... }, worker_payload: { ... } }
+create or replace function accounts.record_anonymization_success(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_attempt_id bigint := (_payload->'original_payload'->>'account_anonymization_attempt_id')::bigint;
+begin
+    if _account_anonymization_attempt_id is null then
+        return jsonb_build_object('status', 'missing_account_anonymization_attempt_id');
+    end if;
+
+    perform accounts.record_anonymization_attempt_succeeded(_account_anonymization_attempt_id);
+
+    return jsonb_build_object('status', 'succeeded');
+end;
+$$;
+
+-- error handler: record failure fact
+-- receives: { original_payload: { account_anonymization_attempt_id, ... }, error: "..." }
+create or replace function accounts.record_anonymization_failure(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_attempt_id bigint := (_payload->'original_payload'->>'account_anonymization_attempt_id')::bigint;
+    _error_message text := _payload->>'error';
+begin
+    if _account_anonymization_attempt_id is null then
+        return jsonb_build_object('status', 'missing_account_anonymization_attempt_id');
+    end if;
+
+    insert into accounts.account_anonymization_attempt_failed (account_anonymization_attempt_id, error_message)
+    values (_account_anonymization_attempt_id, _error_message)
+    on conflict (account_anonymization_attempt_id) do nothing;
+
+    return jsonb_build_object('status', 'succeeded');
+end;
+$$;
+
+-- =============================================================================
+-- work function: performs the actual anonymization
+-- =============================================================================
+
+-- facts: for do_anonymization
+create or replace function accounts.do_anonymization_facts(
+    _account_anonymization_attempt_id bigint,
+    out account_id bigint,
+    out is_anonymized boolean
+)
+language sql
+stable
+as $$
+    select
+        t.account_id,
+        accounts.is_account_anonymized(t.account_id)
+    from accounts.account_anonymization_attempt a
+    join accounts.account_anonymization_task t on t.account_anonymization_task_id = a.account_anonymization_task_id
+    where a.account_anonymization_attempt_id = _account_anonymization_attempt_id;
+$$;
+
+-- the actual anonymization work function (called by worker via db_function)
+create or replace function accounts.do_anonymization(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_attempt_id bigint := (_payload->>'account_anonymization_attempt_id')::bigint;
+    _facts record;
+begin
+    -- 1. VALIDATION
+    if _account_anonymization_attempt_id is null then
+        return jsonb_build_object('status', 'missing_account_anonymization_attempt_id');
+    end if;
+
+    -- 2. FACTS
+    _facts := accounts.do_anonymization_facts(_account_anonymization_attempt_id);
+
+    -- 3. LOGIC
+    if _facts.account_id is null then
+        return jsonb_build_object('status', 'account_anonymization_attempt_not_found');
+    end if;
+
+    if _facts.is_anonymized then
+        perform accounts.record_anonymization_attempt_succeeded(_account_anonymization_attempt_id);
+        return jsonb_build_object('status', 'already_anonymized');
+    end if;
+
+    -- 4. EFFECTS
+    perform accounts.anonymize_account_record(_facts.account_id);
+    perform accounts.add_account_flag(_facts.account_id, 'anonymized');
+    perform accounts.record_anonymization_attempt_succeeded(_account_anonymization_attempt_id);
+
+    return jsonb_build_object('status', 'succeeded');
+end;
+$$;
+
+-- =============================================================================
+-- effect functions
+-- =============================================================================
+
+-- effect: schedule an anonymization attempt
+create or replace function accounts.schedule_anonymization_attempt(
+    _account_anonymization_task_id bigint
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_attempt_id bigint;
+begin
+    insert into accounts.account_anonymization_attempt (account_anonymization_task_id)
+    values (_account_anonymization_task_id)
+    returning account_anonymization_attempt_id into _account_anonymization_attempt_id;
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'accounts.do_anonymization',
+            'account_anonymization_attempt_id', _account_anonymization_attempt_id
+        ),
+        now()
+    );
+end;
+$$;
+
+-- effect: schedule supervisor recheck with exponential backoff
+create or replace function accounts.schedule_anonymization_supervisor_recheck(
+    _account_anonymization_task_id bigint,
+    _num_failures integer,
+    _run_count integer
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _base_delay_seconds integer := 10;
+    _next_check_at timestamptz;
+begin
+    _next_check_at := now() + (
+        _base_delay_seconds * power(2, _num_failures)
+    ) * interval '1 second';
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'accounts.account_anonymization_supervisor',
+            'account_anonymization_task_id', _account_anonymization_task_id,
+            'run_count', _run_count + 1
+        ),
+        _next_check_at
+    );
+end;
+$$;
+
+-- =============================================================================
+-- supervisor: orchestrates anonymization via worker
+-- =============================================================================
+
+create or replace function accounts.account_anonymization_supervisor(
+    _payload jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_task_id bigint := (_payload->>'account_anonymization_task_id')::bigint;
+    _run_count integer := coalesce((_payload->>'run_count')::integer, 0);
+    _max_runs integer := 20;
+    _max_attempts integer := 3;
+    _facts record;
+begin
+    -- 1. VALIDATION
+    if _account_anonymization_task_id is null then
+        return jsonb_build_object('status', 'missing_account_anonymization_task_id');
+    end if;
+
+    if _run_count >= _max_runs then
+        raise exception 'account_anonymization_supervisor exceeded max runs'
+            using detail = 'Possible infinite loop detected',
+                  hint = format('task_id=%s, run_count=%s', _account_anonymization_task_id, _run_count);
+    end if;
+
+    -- 2. LOCK (before facts)
+    perform 1
+    from accounts.account_anonymization_task t
+    where t.account_anonymization_task_id = _account_anonymization_task_id
+    for update;
+
+    -- 3. FACTS
+    _facts := accounts.account_anonymization_supervisor_facts(_account_anonymization_task_id);
+
+    -- 4. LOGIC + EFFECTS
+    if _facts.has_success then
+        return jsonb_build_object('status', 'succeeded');
+    end if;
+
+    if _facts.num_failures >= _max_attempts then
+        return jsonb_build_object('status', 'max_attempts_reached');
+    end if;
+
+    -- if account already anonymized, nothing to do
+    if _facts.is_anonymized then
+        return jsonb_build_object('status', 'already_anonymized');
+    end if;
+
+    if _facts.num_attempts = _facts.num_failures then
+        perform accounts.schedule_anonymization_attempt(_account_anonymization_task_id);
+    end if;
+
+    perform accounts.schedule_anonymization_supervisor_recheck(
+        _account_anonymization_task_id,
+        _facts.num_failures,
+        _run_count
+    );
+
+    return jsonb_build_object('status', 'scheduled');
+end;
 $$;
 
 -- =============================================================================
 -- kickoff: idempotent entry point
 -- =============================================================================
+
+-- facts: for kickoff_account_anonymization
+create or replace function accounts.kickoff_account_anonymization_facts(
+    _account_id bigint,
+    out account_exists boolean,
+    out has_existing_task boolean
+)
+language sql
+stable
+as $$
+    select
+        exists (select 1 from accounts.account a where a.account_id = _account_id),
+        accounts.has_account_anonymization_task(_account_id);
+$$;
+
+-- effect: create task and enqueue supervisor
+create or replace function accounts.create_and_enqueue_anonymization_task(
+    _account_id bigint,
+    _scheduled_at timestamp with time zone
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+    _account_anonymization_task_id bigint;
+begin
+    insert into accounts.account_anonymization_task (account_id)
+    values (_account_id)
+    returning account_anonymization_task_id
+    into _account_anonymization_task_id;
+
+    perform queues.enqueue(
+        'db_function',
+        jsonb_build_object(
+            'task_type', 'db_function',
+            'db_function', 'accounts.account_anonymization_supervisor',
+            'account_anonymization_task_id', _account_anonymization_task_id
+        ),
+        _scheduled_at
+    );
+end;
+$$;
 
 create or replace function accounts.kickoff_account_anonymization(
     _account_id bigint,
@@ -185,151 +515,43 @@ language plpgsql
 security definer
 as $$
 declare
-    _account_anonymization_task_id bigint;
-    _exists boolean;
+    _facts record;
 begin
+    -- 1. VALIDATION
     if _account_id is null then
         validation_failure_message := 'missing_account_id';
         return;
     end if;
 
-    select exists (
-        select 1
-        from accounts.account a
-        where a.account_id = _account_id
-    )
-    into _exists;
+    -- 2. FACTS
+    _facts := accounts.kickoff_account_anonymization_facts(_account_id);
 
-    if not _exists then
+    -- 3. LOGIC
+    if not _facts.account_exists then
         validation_failure_message := 'account_not_found';
         return;
     end if;
 
-    -- if task already exists, skip (supervisor already running)
-    if accounts.has_account_anonymization_task(_account_id) then
-        return;
+    if _facts.has_existing_task then
+        return; -- already kicked off, nothing to do
     end if;
 
-    insert into accounts.account_anonymization_task (account_id)
-    values (_account_id)
-    returning account_anonymization_task_id
-    into _account_anonymization_task_id;
-
-    perform queues.enqueue(
-        'db_function',
-        jsonb_build_object(
-            'task_type', 'db_function',
-            'db_function', 'accounts.account_anonymization_supervisor',
-            'account_anonymization_task_id', _account_anonymization_task_id,
-            'account_id', _account_id
-        ),
-        coalesce(_scheduled_at, now())
-    );
+    -- 4. EFFECTS
+    perform accounts.create_and_enqueue_anonymization_task(_account_id, _scheduled_at);
 
     return;
 end;
 $$;
 
 -- =============================================================================
--- supervisor: orchestrates anonymization via worker
+-- grants
 -- =============================================================================
 
-create or replace function accounts.account_anonymization_supervisor(
-    payload jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-as $$
-declare
-    _account_anonymization_task_id bigint := (payload->>'account_anonymization_task_id')::bigint;
-    _account_id bigint := (payload->>'account_id')::bigint;
-    _has_success boolean;
-    _num_failures integer;
-    _num_scheduled integer;
-    _max_attempts integer := 3;
-    _base_delay_seconds integer := 10;
-    _next_check_at timestamptz;
-begin
-    if _account_anonymization_task_id is null then
-        return jsonb_build_object(
-            'status', 'missing_account_anonymization_task_id'
-        );
-    end if;
-
-    if _account_id is null then
-        return jsonb_build_object(
-            'status', 'missing_account_id'
-        );
-    end if;
-
-    -- lock root task
-    perform 1
-    from accounts.account_anonymization_task t
-    where t.account_anonymization_task_id = _account_anonymization_task_id
-    for update;
-
-    select accounts.has_account_anonymization_task_succeeded(_account_anonymization_task_id)
-    into _has_success;
-
-    if _has_success then
-        return jsonb_build_object('status', 'succeeded');
-    end if;
-
-    -- check if account already has the anonymized flag
-    if accounts.is_account_anonymized(_account_id) then
-        insert into accounts.account_anonymization_task_succeeded (account_anonymization_task_id)
-        values (_account_anonymization_task_id)
-        on conflict (account_anonymization_task_id) do nothing;
-
-        return jsonb_build_object('status', 'succeeded');
-    end if;
-
-    select accounts.count_account_anonymization_task_failures(_account_anonymization_task_id)
-    into _num_failures;
-
-    if _num_failures >= _max_attempts then
-        return jsonb_build_object('status', 'succeeded');
-    end if;
-
-    select accounts.count_account_anonymization_task_scheduled(_account_anonymization_task_id)
-    into _num_scheduled;
-
-    _next_check_at := (
-        now() +
-        ((_base_delay_seconds)::double precision * power(2, coalesce(_num_failures, 0))) *
-        interval '1 second'
-    );
-
-    -- schedule anonymization attempt if none outstanding
-    if coalesce(_num_scheduled, 0) <= coalesce(_num_failures, 0) then
-        insert into accounts.account_anonymization_task_scheduled (account_anonymization_task_id)
-        values (_account_anonymization_task_id);
-
-        perform queues.enqueue(
-            'db_function',
-            jsonb_build_object(
-                'task_type', 'db_function',
-                'db_function', 'accounts.anonymize_account',
-                'account_id', _account_id
-            ),
-            now()
-        );
-    end if;
-
-    perform queues.enqueue(
-        'db_function',
-        jsonb_build_object(
-            'task_type', 'db_function',
-            'db_function', 'accounts.account_anonymization_supervisor',
-            'account_anonymization_task_id', _account_anonymization_task_id,
-            'account_id', _account_id
-        ),
-        _next_check_at
-    );
-
-    return jsonb_build_object('status', 'succeeded');
-end;
-$$;
-
+grant execute on function accounts.get_anonymization_payload(jsonb) to worker_service_user;
+grant execute on function accounts.record_anonymization_success(jsonb) to worker_service_user;
+grant execute on function accounts.record_anonymization_failure(jsonb) to worker_service_user;
+grant execute on function accounts.do_anonymization(jsonb) to worker_service_user;
+grant execute on function accounts.schedule_anonymization_attempt(bigint) to worker_service_user;
+grant execute on function accounts.schedule_anonymization_supervisor_recheck(bigint, integer, integer) to worker_service_user;
 grant execute on function accounts.account_anonymization_supervisor(jsonb) to worker_service_user;
+grant execute on function accounts.kickoff_account_anonymization(bigint, timestamp with time zone) to worker_service_user;

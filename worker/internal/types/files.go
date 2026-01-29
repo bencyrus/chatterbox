@@ -2,7 +2,7 @@ package types
 
 // FileDeletePayload represents the payload structure for file_delete tasks
 // after being prepared by the before_handler in Postgres.
-// It is built by files.get_file_delete_payload(payload jsonb) and intentionally
+// It is built by files.get_file_deletion_payload(payload jsonb) and intentionally
 // only exposes the file ID so the worker remains unaware of storage details.
 type FileDeletePayload struct {
 	FileID int64 `json:"file_id"`

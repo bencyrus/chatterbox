@@ -1,7 +1,7 @@
 ## Queues and Worker
 
 Status: current
-Last verified: 2025-10-08
+Last verified: 2025-01-27
 
 ← Back to [`docs/postgres/README.md`](./README.md)
 
@@ -171,21 +171,20 @@ Channel task payload (file_delete)
 ```json
 {
   "task_type": "file_delete",
-  "file_deletion_task_id": 42,
-  "file_id": 987,
-  "before_handler": "files.get_file_delete_payload",
-  "success_handler": "files.record_file_delete_success",
-  "error_handler": "files.record_file_delete_failure"
+  "file_deletion_attempt_id": 789,
+  "before_handler": "files.get_file_deletion_payload",
+  "success_handler": "files.record_file_deletion_success",
+  "error_handler": "files.record_file_deletion_failure"
 }
 ```
 
 In the file deletion flow:
 
 - The **supervisor** (`files.file_deletion_supervisor`) owns retries, backoff, and termination.
-- The **before handler** resolves the current file row (`bucket`, `object_key`, etc.) from `file_id`.
+- The **before handler** receives `file_deletion_attempt_id` and resolves the file row by joining attempt → task → file.
 - The worker calls the files HTTP service to obtain a signed GCS `DELETE` URL and then deletes the object from storage.
-- The **success handler** records success facts (and, via helper functions, marks the file logically deleted).
-- The **error handler** records failure facts used by `files.is_file_deletion_stuck`.
+- The **success handler** records success facts against the attempt (`file_deletion_attempt_succeeded`) and marks the file logically deleted.
+- The **error handler** records failure facts against the attempt (`file_deletion_attempt_failed`) used by `files.is_file_deletion_stuck`.
 
 ### Security and grants
 
@@ -294,24 +293,24 @@ Use this as a concrete sanity check for the account deletion stack:
 
 - **Happy path**
   - Create an account, profile, cue, upload intent, and complete at least one recording upload so that `learning.profile_cue_recording` and `files.file` have rows tied to the account.
-  - Call `api.request_account_deletion(_account_id)` and ensure:
+  - Call `api.request_account_deletion(account_id)` and ensure:
     - `accounts.account_flag` contains `'deleted'` for the account.
     - `accounts.account_deletion_task` has one row for the account.
   - Run the worker (or manually invoke supervisors in order) until:
-    - Each file for the account has a `files.file_deletion_task` row, a corresponding `..._succeeded` row, and `files.file_metadata` contains `"deleted": true` via `files.mark_file_deleted`.
-    - `accounts.account_anonymization_task` gets created and `accounts.account_flag` contains `'anonymized'`.
-    - `accounts.account_deletion_task_succeeded` has a row for the task.
+    - Each file for the account has a `files.file_deletion_task` row, a `files.file_deletion_attempt` with a corresponding `files.file_deletion_attempt_succeeded` row, and `files.file_metadata` contains `"deleted": true` via `files.mark_file_deleted`.
+    - `accounts.account_anonymization_task` gets created with a succeeded attempt and `accounts.account_flag` contains `'anonymized'`.
+    - `accounts.account_deletion_attempt_succeeded` has a row for a completed attempt.
 - **File deletion stuck path**
-  - Arrange for `file_delete` tasks to fail (e.g., point storage at an invalid bucket in a dev environment) so that `files.record_file_delete_failure` is called multiple times.
+  - Arrange for `file_delete` tasks to fail (e.g., point storage at an invalid bucket in a dev environment) so that `files.record_file_deletion_failure` is called multiple times.
   - Confirm that:
-    - `files.file_deletion_task_failed` accumulates failures.
+    - `files.file_deletion_attempt_failed` accumulates failures (one per failed attempt).
     - `files.is_file_deletion_stuck(file_id)` returns `true` after the configured max attempts.
-    - `accounts.account_deletion_task_failed` receives a row with an appropriate error message and the supervisor stops retrying.
+    - `accounts.account_deletion_attempt_failed` receives a row with an appropriate error message and the root supervisor stops retrying.
 - **Account anonymization stuck path**
-  - Simulate failures in `accounts.anonymize_account` (e.g., by temporary raise in a dev branch) and observe:
-    - `accounts.account_anonymization_task_failed` accumulating failures.
+  - Simulate failures in `accounts.do_anonymization` (e.g., by temporary raise in a dev branch) and observe:
+    - `accounts.account_anonymization_attempt_failed` accumulating failures (one per failed attempt).
     - `accounts.is_account_anonymization_stuck(account_id)` returning `true` after the configured max attempts.
-    - `accounts.account_deletion_task_failed` being populated and the root supervisor terminating further retries.
+    - `accounts.account_deletion_attempt_failed` being populated and the root supervisor terminating further retries.
 
 ### See also
 
