@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"net/http"
 	"strings"
 	"time"
@@ -96,6 +97,17 @@ func (s *Service) GetSignedDeleteURL(ctx context.Context, fileID int64) (string,
 func (s *Service) DeleteBySignedURL(ctx context.Context, signedURL string) error {
 	if signedURL == "" {
 		return fmt.Errorf("signed delete URL is empty")
+	}
+
+	// In local dev, the files service returns signed URLs rewritten to
+	// localhost:4443 (for browser/curl on host). But the worker runs inside
+	// Docker, where localhost points at the worker container, not the gcs
+	// emulator container. Rewrite only for that special case.
+	if u, err := url.Parse(signedURL); err == nil {
+		if u.Host == "localhost:4443" || u.Host == "0.0.0.0:4443" || u.Host == "[::1]:4443" {
+			u.Host = "gcs:4443"
+			signedURL = u.String()
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, signedURL, nil)
