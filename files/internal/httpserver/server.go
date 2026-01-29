@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
@@ -244,14 +245,29 @@ func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ttl := time.Duration(s.cfg.GCSSignedURLTTLSeconds) * time.Second
-	url, err := gcs.SignedDeleteURL(m.Bucket, m.ObjectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
-	if err != nil {
-		logger.Error(ctx, "failed to generate signed delete URL", err, logger.Fields{
-			"file_id":    fileID,
-			"object_key": m.ObjectKey,
-		})
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
+	var deleteURL string
+
+	// Local dev: fake-gcs-server does not support DELETE against the V4 signed
+	// URL path style (/bucket/object). Instead, use its JSON API endpoint.
+	if s.cfg.Environment == "local" && s.cfg.GCSEmulatorURL != "" {
+		base, err := url.Parse(s.cfg.GCSEmulatorURL)
+		if err != nil {
+			http.Error(w, "invalid gcs emulator url", http.StatusInternalServerError)
+			return
+		}
+		base.Path = fmt.Sprintf("/storage/v1/b/%s/o/%s", m.Bucket, url.PathEscape(m.ObjectKey))
+		deleteURL = base.String()
+	} else {
+		signedURL, err := gcs.SignedDeleteURL(m.Bucket, m.ObjectKey, s.cfg.GCSSigningEmail, s.cfg.GCSSigningPrivateKey, ttl)
+		if err != nil {
+			logger.Error(ctx, "failed to generate signed delete URL", err, logger.Fields{
+				"file_id":    fileID,
+				"object_key": m.ObjectKey,
+			})
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		deleteURL = s.rewriteForEmulator(signedURL)
 	}
 
 	logger.Info(ctx, "signed delete URL generated successfully", logger.Fields{
@@ -260,7 +276,7 @@ func (s *Server) SignedDeleteURLHandler(w http.ResponseWriter, r *http.Request) 
 	})
 
 	response := map[string]any{
-		"url": s.rewriteForEmulator(url),
+		"url": deleteURL,
 	}
 
 	enc := json.NewEncoder(w)
