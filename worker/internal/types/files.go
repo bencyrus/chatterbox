@@ -23,8 +23,9 @@ type FileSignedDeleteURLResponse struct {
 	URL string `json:"url"`
 }
 
-// FileSignedDownloadURLResponse represents the HTTP response body returned by
-// the files service /signed_download_url endpoint.
+// FileSignedDownloadURLResponse represents a single item in the array response
+// returned by the files service /signed_download_url endpoint.
 type FileSignedDownloadURLResponse struct {
-	URL string `json:"url"`
+	FileID int64  `json:"file_id"`
+	URL    string `json:"url"`
 }

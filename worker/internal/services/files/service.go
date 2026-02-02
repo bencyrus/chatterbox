@@ -108,8 +108,9 @@ func (s *Service) GetSignedDownloadURL(ctx context.Context, fileID int64) (strin
 		"file_id": fileID,
 	})
 
+	// The files service expects a "files" array, not a single "file_id"
 	body := map[string]any{
-		"file_id": fileID,
+		"files": []int64{fileID},
 	}
 
 	reqBody, err := json.Marshal(body)
@@ -136,11 +137,15 @@ func (s *Service) GetSignedDownloadURL(ctx context.Context, fileID int64) (strin
 		return "", fmt.Errorf("files service signed_download_url returned status %d", resp.StatusCode)
 	}
 
-	var parsed types.FileSignedDownloadURLResponse
+	// The files service returns an array of {file_id, url} objects
+	var parsed []types.FileSignedDownloadURLResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
 		return "", fmt.Errorf("failed to decode signed_download_url response: %w", err)
 	}
-	if parsed.URL == "" {
+	if len(parsed) == 0 {
+		return "", fmt.Errorf("files service signed_download_url returned empty array")
+	}
+	if parsed[0].URL == "" {
 		return "", fmt.Errorf("files service signed_download_url response missing url")
 	}
 
@@ -148,7 +153,7 @@ func (s *Service) GetSignedDownloadURL(ctx context.Context, fileID int64) (strin
 		"file_id": fileID,
 	})
 
-	return parsed.URL, nil
+	return parsed[0].URL, nil
 }
 
 // DeleteBySignedURL performs an HTTP DELETE against the provided signed URL.
