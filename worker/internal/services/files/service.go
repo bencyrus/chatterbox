@@ -5,8 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -87,6 +87,64 @@ func (s *Service) GetSignedDeleteURL(ctx context.Context, fileID int64) (string,
 	}
 
 	logger.Info(ctx, "received signed delete URL from files service", logger.Fields{
+		"file_id": fileID,
+	})
+
+	return parsed.URL, nil
+}
+
+// GetSignedDownloadURL requests a signed download URL for a specific file from
+// the files service. The files service is responsible for resolving storage
+// details (bucket, object key) from the file ID.
+func (s *Service) GetSignedDownloadURL(ctx context.Context, fileID int64) (string, error) {
+	if s.baseURL == "" {
+		return "", fmt.Errorf("files service baseURL is empty")
+	}
+	if s.apiKey == "" {
+		return "", fmt.Errorf("files service api key is empty")
+	}
+
+	logger.Info(ctx, "requesting signed download URL from files service", logger.Fields{
+		"file_id": fileID,
+	})
+
+	body := map[string]any{
+		"file_id": fileID,
+	}
+
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal signed download url request: %w", err)
+	}
+
+	reqURL := s.baseURL + "/signed_download_url"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("failed to create signed download url request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-File-Service-Api-Key", s.apiKey)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call files service signed_download_url: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("files service signed_download_url returned status %d", resp.StatusCode)
+	}
+
+	var parsed types.FileSignedDownloadURLResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("failed to decode signed_download_url response: %w", err)
+	}
+	if parsed.URL == "" {
+		return "", fmt.Errorf("files service signed_download_url response missing url")
+	}
+
+	logger.Info(ctx, "received signed download URL from files service", logger.Fields{
 		"file_id": fileID,
 	})
 

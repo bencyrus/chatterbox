@@ -46,6 +46,7 @@ func NewWorker(cfg config.Config) (*Worker, error) {
 	dispatcher.Register(processing.NewEmailProcessor(handlers, emailSvc))
 	dispatcher.Register(processing.NewSMSProcessor(handlers, smsSvc))
 	dispatcher.Register(processing.NewFileDeleteProcessor(handlers, filesSvc))
+	dispatcher.Register(processing.NewTranscriptionKickoffProcessor(handlers, filesSvc, cfg.ElevenLabsAPIKey))
 
 	return &Worker{
 		cfg:        cfg,

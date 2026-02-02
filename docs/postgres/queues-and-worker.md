@@ -12,7 +12,7 @@ Last verified: 2025-01-27
 ### Core data model (queues)
 
 - `queues.task`
-  - Columns: `task_id`, `task_type` (`'db_function' | 'email' | 'sms' | 'file_delete'`), `payload jsonb`, `enqueued_at`, `scheduled_at`.
+  - Columns: `task_id`, `task_type` (`'db_function' | 'email' | 'sms' | 'file_delete' | 'transcription_kickoff'`), `payload jsonb`, `enqueued_at`, `scheduled_at`.
   - Immutable after creation; state is tracked via append-only tables below.
 - `queues.task_lease`
   - Append-only record of task claim attempts: `task_lease_id`, `task_id`, `leased_at`, `expires_at`.
@@ -47,6 +47,7 @@ Last verified: 2025-01-27
 - **Dispatch**: Route by `task_type` to the appropriate processor:
   - `db_function`: call `internal.run_function(payload.db_function, payload)` and respect the JSON envelope
   - `email`/`sms`: call `before_handler` to build a provider payload, call the provider, then call `success_handler` or `error_handler`
+  - `transcription_kickoff`: call `before_handler`, get signed URL from files service, call ElevenLabs API with `webhook=true`, then call `success_handler` or `error_handler`
 - **Record failure** (if error): call `queues.fail_task(task_id, message)` for observability.
 - **Complete**: Always call `queues.complete_task(task_id)` after processing, whether success or failure. Retries are handled by supervisors creating new attempts, not by re-processing the same task. Lease expiry is only for crash recovery.
 - Always pass the full `payload jsonb` through; DB functions extract what they need.
@@ -185,6 +186,28 @@ In the file deletion flow:
 - The worker calls the files HTTP service to obtain a signed GCS `DELETE` URL and then deletes the object from storage.
 - The **success handler** records success facts against the attempt (`file_deletion_attempt_succeeded`) and marks the file logically deleted.
 - The **error handler** records failure facts against the attempt (`file_deletion_attempt_failed`) used by `files.is_file_deletion_stuck`.
+
+Channel task payload (transcription_kickoff)
+
+```json
+{
+  "task_type": "transcription_kickoff",
+  "recording_transcription_attempt_id": 101,
+  "before_handler": "learning.get_recording_transcription_kickoff_payload",
+  "success_handler": "learning.record_recording_transcription_request_success",
+  "error_handler": "learning.record_recording_transcription_request_failure"
+}
+```
+
+In the transcription flow (two-stage success):
+
+- The **supervisor** (`learning.recording_transcription_supervisor`) owns retries, backoff, webhook polling, and termination.
+- The **before handler** receives `recording_transcription_attempt_id` and resolves the file ID from attempt → task → profile_cue_recording.
+- The worker gets a signed download URL from the files service, calls ElevenLabs API with `webhook=true`, and returns the `request_id`.
+- The **success handler** records `request_succeeded` (stage 1) and stores the `elevenlabs_request_id`.
+- The **error handler** records `attempt_failed` if the API call fails.
+- A separate **webhook endpoint** (`api.eleven_labs_transcription_webhook`) receives the ElevenLabs callback and stores the raw response.
+- The supervisor polls for the webhook, verifies the signature, stores the transcript, and marks `response_succeeded` (stage 2, terminal).
 
 ### Security and grants
 
