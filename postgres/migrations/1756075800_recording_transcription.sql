@@ -113,14 +113,14 @@ create or replace function elevenlabs.transcription_webhook_signature_is_valid(
     _elevenlabs_signature_header text,
     _signing_secret text,
     _current_timestamp_epoch bigint,
-    _timestamp_tolerance_seconds integer default 300
+    _timestamp_tolerance_seconds integer default 1800
 )
 returns boolean
 language plpgsql
 immutable
 as $$
 /**
- * Verifies ElevenLabs webhook signatures.
+ * Verifies ElevenLabs webhook signatures per official docs.
  *
  * This function has unit tests!
  * See: elevenlabs.transcription_webhook_signature_is_valid_run_unit_tests
@@ -128,89 +128,45 @@ as $$
  * Header format: ElevenLabs-Signature: t=<timestamp>,v0=<hash>
  * Hash is HMAC-SHA256 of: timestamp + "." + raw_body
  *
- * _raw_response_body = The raw response body received from the webhook.
- * _elevenlabs_signature_header = The value of the 'ElevenLabs-Signature' header.
- * _signing_secret = The ElevenLabs webhook signing secret.
- * _current_timestamp_epoch = The current time in Unix epoch seconds.
- * _timestamp_tolerance_seconds = The maximum allowed difference in seconds (default 300).
- *
- * returns true if the signature is valid and within timestamp tolerance, false otherwise.
+ * Verification follows ElevenLabs official approach:
+ * https://elevenlabs.io/docs/product-guides/administration/webhooks
  */
 declare
-    _elements text[];
-    _element text;
-    _prefix text;
-    _value text;
-    _received_timestamp bigint := null;
-    _v0_signatures text[] := array[]::text[];
-    _signed_payload text;
+    _parts text[];
+    _received_timestamp bigint;
+    _received_signature text;
     _expected_signature text;
-    _signature_match boolean := false;
 begin
-    -- 1. extract timestamp and signatures from the header
-    _elements := string_to_array(_elevenlabs_signature_header, ',');
+    -- 1. split header: "t=123,v0=abc" -> ["t=123", "v0=abc"]
+    _parts := string_to_array(_elevenlabs_signature_header, ',');
 
-    foreach _element in array _elements loop
-        _element := trim(_element);
-
-        -- check if element contains '=' before parsing (handles malformed headers)
-        if position('=' in _element) = 0 then
-            raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.malformed_header_element: %', _element;
-            continue;
-        end if;
-
-        _prefix := substring(_element from 1 for position('=' in _element) - 1);
-        _value := substring(_element from position('=' in _element) + 1);
-
-        if _prefix = 't' then
-            begin
-                _received_timestamp := _value::bigint;
-            exception when others then
-                raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.malformed_timestamp: %', _value;
-            end;
-        elsif _prefix = 'v0' then
-            _v0_signatures := array_append(_v0_signatures, _value);
-        end if;
-    end loop;
-
-    -- validate that required components were found
-    if _received_timestamp is null then
-        raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.missing_timestamp';
+    if array_length(_parts, 1) is null or array_length(_parts, 1) < 2 then
         return false;
     end if;
 
-    if array_length(_v0_signatures, 1) is null or array_length(_v0_signatures, 1) = 0 then
-        raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.missing_v0_signature';
+    -- 2. extract timestamp (strip "t=" prefix)
+    begin
+        _received_timestamp := substring(_parts[1] from 3)::bigint;
+    exception when others then
+        return false;
+    end;
+
+    -- 3. extract signature (full "v0=..." for comparison)
+    _received_signature := _parts[2];
+
+    -- 4. check timestamp not too old (replay attack protection)
+    if _current_timestamp_epoch - _received_timestamp > _timestamp_tolerance_seconds then
         return false;
     end if;
 
-    -- 2. check timestamp tolerance
-    if abs(_current_timestamp_epoch - _received_timestamp) > _timestamp_tolerance_seconds then
-        raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.timestamp_out_of_tolerance. Received: %, Current: %, Tolerance: %s',
-            _received_timestamp, _current_timestamp_epoch, _timestamp_tolerance_seconds;
-        return false;
-    end if;
+    -- 5. compute expected signature
+    _expected_signature := 'v0=' || encode(
+        public.hmac(_received_timestamp::text || '.' || _raw_response_body, _signing_secret, 'sha256'),
+        'hex'
+    );
 
-    -- 3. prepare the signed_payload string
-    _signed_payload := _received_timestamp::text || '.' || _raw_response_body;
-
-    -- 4. compute expected signature using HMAC-SHA256
-    _expected_signature := encode(public.hmac(_signed_payload, _signing_secret, 'sha256'::text), 'hex');
-
-    -- 5. compare expected signature against received v0 signatures
-    foreach _element in array _v0_signatures loop
-        if _element = _expected_signature then
-            _signature_match := true;
-            exit;
-        end if;
-    end loop;
-
-    if not _signature_match then
-        raise warning 'elevenlabs.transcription_webhook_signature_is_valid.invalid.no_signature_match. Expected: %', _expected_signature;
-        return false;
-    end if;
-
-    return true;
+    -- 6. compare signatures
+    return _received_signature = _expected_signature;
 end;
 $$;
 
@@ -236,14 +192,13 @@ begin
                 'hex'
             ),
             'whsec_test_secret',
-            1752155502,
-            300
+            1752155502
         );
 
-    -- test 2: valid signature, timestamp within tolerance
+    -- test 2: valid signature, timestamp slightly in past (within 30 min tolerance)
     return query
     select
-        'valid signature, timestamp within tolerance -> valid'::text,
+        'valid signature, timestamp 100s old -> valid'::text,
         elevenlabs.transcription_webhook_signature_is_valid(
             '{"type":"speech_to_text_transcription","data":{"request_id":"test123"}}',
             't=1752155502,v0=' || encode(
@@ -255,14 +210,31 @@ begin
                 'hex'
             ),
             'whsec_test_secret',
-            1752155600,
-            300
+            1752155602  -- 100 seconds later
         );
 
-    -- test 3: invalid - timestamp outside tolerance
+    -- test 3: valid signature, timestamp in future (allowed - only "too old" is rejected)
     return query
     select
-        'timestamp outside tolerance -> fails'::text,
+        'valid signature, timestamp in future -> valid'::text,
+        elevenlabs.transcription_webhook_signature_is_valid(
+            '{"type":"speech_to_text_transcription","data":{"request_id":"test123"}}',
+            't=1752155502,v0=' || encode(
+                public.hmac(
+                    '1752155502.{"type":"speech_to_text_transcription","data":{"request_id":"test123"}}',
+                    'whsec_test_secret',
+                    'sha256'
+                ),
+                'hex'
+            ),
+            'whsec_test_secret',
+            1752155400  -- 102 seconds before (timestamp is "in future")
+        );
+
+    -- test 4: invalid - timestamp too old (beyond 30 min tolerance)
+    return query
+    select
+        'timestamp too old -> fails'::text,
         not elevenlabs.transcription_webhook_signature_is_valid(
             '{"type":"speech_to_text_transcription","data":{"request_id":"test123"}}',
             't=1752155502,v0=' || encode(
@@ -274,11 +246,10 @@ begin
                 'hex'
             ),
             'whsec_test_secret',
-            1752156000,
-            300
+            1752157400  -- 1898 seconds later (> 1800s tolerance)
         );
 
-    -- test 4: invalid - wrong secret
+    -- test 5: invalid - wrong secret
     return query
     select
         'wrong secret -> fails'::text,
@@ -293,11 +264,10 @@ begin
                 'hex'
             ),
             'whsec_wrong_secret',
-            1752155502,
-            300
+            1752155502
         );
 
-    -- test 5: invalid - modified payload
+    -- test 6: invalid - modified payload
     return query
     select
         'modified payload -> fails'::text,
@@ -312,32 +282,40 @@ begin
                 'hex'
             ),
             'whsec_test_secret',
-            1752155502,
-            300
+            1752155502
         );
 
-    -- test 6: invalid - missing timestamp
+    -- test 7: invalid - malformed header (missing v0)
     return query
     select
-        'missing timestamp -> fails'::text,
-        not elevenlabs.transcription_webhook_signature_is_valid(
-            '{"type":"test"}',
-            'v0=abc123',
-            'whsec_test_secret',
-            1752155502,
-            300
-        );
-
-    -- test 7: invalid - missing signature
-    return query
-    select
-        'missing v0 signature -> fails'::text,
+        'malformed header, missing v0 -> fails'::text,
         not elevenlabs.transcription_webhook_signature_is_valid(
             '{"type":"test"}',
             't=1752155502',
             'whsec_test_secret',
-            1752155502,
-            300
+            1752155502
+        );
+
+    -- test 8: invalid - malformed header (missing timestamp)
+    return query
+    select
+        'malformed header, missing timestamp -> fails'::text,
+        not elevenlabs.transcription_webhook_signature_is_valid(
+            '{"type":"test"}',
+            'v0=abc123',
+            'whsec_test_secret',
+            1752155502
+        );
+
+    -- test 9: invalid - empty header
+    return query
+    select
+        'empty header -> fails'::text,
+        not elevenlabs.transcription_webhook_signature_is_valid(
+            '{"type":"test"}',
+            '',
+            'whsec_test_secret',
+            1752155502
         );
 end;
 $$;
@@ -804,8 +782,7 @@ begin
         _response.raw_body::text,
         _response.signature_header,
         _signing_secret,
-        extract(epoch from _response.received_at)::bigint,
-        300
+        extract(epoch from _response.received_at)::bigint
     );
 
     if not _is_valid then
@@ -994,7 +971,7 @@ as $$
     );
 $$;
 
-create or replace function api.request_transcription(
+create or replace function api.request_recording_transcription(
     profile_cue_recording_id bigint
 )
 returns jsonb
@@ -1007,7 +984,7 @@ declare
 begin
     -- 1. VALIDATION
     if _authenticated_account_id is null then
-        raise exception 'Request Transcription Failed'
+        raise exception 'Request Recording Transcription Failed'
             using detail = 'Unauthorized', hint = 'unauthorized';
     end if;
 
@@ -1016,10 +993,10 @@ begin
         select 1
         from learning.profile_cue_recording pcr
         join learning.profile p on p.profile_id = pcr.profile_id
-        where pcr.profile_cue_recording_id = request_transcription.profile_cue_recording_id
+        where pcr.profile_cue_recording_id = request_recording_transcription.profile_cue_recording_id
           and p.account_id = _authenticated_account_id
     ) then
-        raise exception 'Request Transcription Failed'
+        raise exception 'Request Recording Transcription Failed'
             using detail = 'Recording not found', hint = 'recording_not_found';
     end if;
 
@@ -1068,7 +1045,7 @@ $$;
 grant execute on function api.eleven_labs_transcription_webhook(json) to anon;
 
 -- api endpoints for authenticated users
-grant execute on function api.request_transcription(bigint) to authenticated;
+grant execute on function api.request_recording_transcription(bigint) to authenticated;
 
 -- worker service user grants
 grant execute on function learning.get_recording_transcription_kickoff_payload(jsonb) to worker_service_user;
