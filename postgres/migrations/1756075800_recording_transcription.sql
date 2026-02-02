@@ -33,7 +33,7 @@ on conflict (key) do nothing;
 -- =============================================================================
 
 -- task table: one per transcription request
-create table learning.recording_transcription_task (
+create table elevenlabs.recording_transcription_task (
     recording_transcription_task_id bigserial primary key,
     profile_cue_recording_id bigint not null
         references learning.profile_cue_recording(profile_cue_recording_id)
@@ -45,10 +45,10 @@ create table learning.recording_transcription_task (
 );
 
 -- attempt table: one per API call attempt
-create table learning.recording_transcription_attempt (
+create table elevenlabs.recording_transcription_attempt (
     recording_transcription_attempt_id bigserial primary key,
     recording_transcription_task_id bigint not null
-        references learning.recording_transcription_task(recording_transcription_task_id)
+        references elevenlabs.recording_transcription_task(recording_transcription_task_id)
         on delete cascade,
     created_at timestamp with time zone not null default now()
 );
@@ -58,7 +58,7 @@ create table learning.recording_transcription_attempt (
 create table elevenlabs.recording_transcription_request (
     recording_transcription_request_id bigserial primary key,
     recording_transcription_attempt_id bigint not null unique
-        references learning.recording_transcription_attempt(recording_transcription_attempt_id)
+        references elevenlabs.recording_transcription_attempt(recording_transcription_attempt_id)
         on delete cascade,
     elevenlabs_request_id text not null unique,  -- unique constraint creates index for webhook lookup
     created_at timestamp with time zone not null default now()
@@ -83,15 +83,15 @@ create table elevenlabs.recording_transcription_response (
 --   - request succeeded = recording_transcription_request exists for this attempt
 --   - response succeeded = recording_transcript exists for this recording (terminal)
 -- written by: transcription kickoff worker on API failure, OR supervisor on verification failure
-create table learning.recording_transcription_attempt_failed (
+create table elevenlabs.recording_transcription_attempt_failed (
     recording_transcription_attempt_id bigint primary key
-        references learning.recording_transcription_attempt(recording_transcription_attempt_id)
+        references elevenlabs.recording_transcription_attempt(recording_transcription_attempt_id)
         on delete cascade,
     error_message text,
     created_at timestamp with time zone not null default now()
 );
 
--- transcript storage
+-- transcript storage (stays in learning - this is the actual learning outcome)
 create table learning.recording_transcript (
     recording_transcript_id bigserial primary key,
     profile_cue_recording_id bigint not null unique
@@ -440,7 +440,7 @@ $$;
 -- =============================================================================
 
 -- facts: get kickoff payload facts from attempt_id
-create or replace function learning.get_recording_transcription_kickoff_payload_facts(
+create or replace function elevenlabs.get_recording_transcription_kickoff_payload_facts(
     _recording_transcription_attempt_id bigint,
     out file_id bigint,
     out profile_cue_recording_id bigint
@@ -451,8 +451,8 @@ as $$
     select
         r.file_id,
         r.profile_cue_recording_id
-    from learning.recording_transcription_attempt a
-    join learning.recording_transcription_task t
+    from elevenlabs.recording_transcription_attempt a
+    join elevenlabs.recording_transcription_task t
         on t.recording_transcription_task_id = a.recording_transcription_task_id
     join learning.profile_cue_recording r
         on r.profile_cue_recording_id = t.profile_cue_recording_id
@@ -460,7 +460,7 @@ as $$
 $$;
 
 -- before handler: build provider payload from recording_transcription_attempt_id in payload
-create or replace function learning.get_recording_transcription_kickoff_payload(
+create or replace function elevenlabs.get_recording_transcription_kickoff_payload(
     _payload jsonb
 )
 returns jsonb
@@ -478,7 +478,7 @@ begin
     end if;
 
     -- 2. FACTS
-    _facts := learning.get_recording_transcription_kickoff_payload_facts(_recording_transcription_attempt_id);
+    _facts := elevenlabs.get_recording_transcription_kickoff_payload_facts(_recording_transcription_attempt_id);
 
     -- 3. LOGIC
     if _facts.file_id is null then
@@ -498,7 +498,7 @@ $$;
 
 -- success handler: record request succeeded (API call worked)
 -- receives: { original_payload: { recording_transcription_attempt_id, ... }, worker_payload: { request_id: "..." } }
-create or replace function learning.record_recording_transcription_request_success(
+create or replace function elevenlabs.record_recording_transcription_request_success(
     _payload jsonb
 )
 returns jsonb
@@ -533,14 +533,14 @@ end;
 $$;
 
 -- effect: record attempt failure
-create or replace function learning.record_recording_transcription_attempt_failure(
+create or replace function elevenlabs.record_recording_transcription_attempt_failure(
     _recording_transcription_attempt_id bigint,
     _error_message text
 )
 returns void
 language sql
 as $$
-    insert into learning.recording_transcription_attempt_failed (
+    insert into elevenlabs.recording_transcription_attempt_failed (
         recording_transcription_attempt_id,
         error_message
     ) values (
@@ -552,7 +552,7 @@ $$;
 
 -- error handler: record request failure (API call failed)
 -- receives: { original_payload: { recording_transcription_attempt_id, ... }, error: "..." }
-create or replace function learning.record_recording_transcription_request_failure(
+create or replace function elevenlabs.record_recording_transcription_request_failure(
     _payload jsonb
 )
 returns jsonb
@@ -567,7 +567,7 @@ begin
         return jsonb_build_object('status', 'missing_recording_transcription_attempt_id');
     end if;
 
-    perform learning.record_recording_transcription_attempt_failure(
+    perform elevenlabs.record_recording_transcription_attempt_failure(
         _recording_transcription_attempt_id,
         _error_message
     );
@@ -577,7 +577,7 @@ end;
 $$;
 
 -- effect: schedule a transcription kickoff attempt (returns attempt_id)
-create or replace function learning.schedule_recording_transcription_kickoff(
+create or replace function elevenlabs.schedule_recording_transcription_kickoff(
     _recording_transcription_task_id bigint
 )
 returns bigint
@@ -587,7 +587,7 @@ as $$
 declare
     _recording_transcription_attempt_id bigint;
 begin
-    insert into learning.recording_transcription_attempt (recording_transcription_task_id)
+    insert into elevenlabs.recording_transcription_attempt (recording_transcription_task_id)
     values (_recording_transcription_task_id)
     returning recording_transcription_attempt_id into _recording_transcription_attempt_id;
 
@@ -596,9 +596,9 @@ begin
         jsonb_build_object(
             'task_type', 'transcription_kickoff',
             'recording_transcription_attempt_id', _recording_transcription_attempt_id,
-            'before_handler', 'learning.get_recording_transcription_kickoff_payload',
-            'success_handler', 'learning.record_recording_transcription_request_success',
-            'error_handler', 'learning.record_recording_transcription_request_failure'
+            'before_handler', 'elevenlabs.get_recording_transcription_kickoff_payload',
+            'success_handler', 'elevenlabs.record_recording_transcription_request_success',
+            'error_handler', 'elevenlabs.record_recording_transcription_request_failure'
         ),
         now()
     );
@@ -611,7 +611,7 @@ $$;
 -- supervisor: orchestrates transcription workflow
 -- =============================================================================
 
--- facts: check if recording already has a transcript
+-- facts: check if recording already has a transcript (stays in learning - queries learning.recording_transcript)
 create or replace function learning.has_recording_transcript(
     _profile_cue_recording_id bigint
 )
@@ -626,7 +626,7 @@ as $$
 $$;
 
 -- facts: all supervisor facts in one function
-create or replace function learning.recording_transcription_supervisor_facts(
+create or replace function elevenlabs.recording_transcription_supervisor_facts(
     _recording_transcription_task_id bigint,
     _current_attempt_id bigint default null,
     out has_transcript boolean,
@@ -645,7 +645,7 @@ begin
     -- get recording id for transcript check
     _profile_cue_recording_id := (
         select t.profile_cue_recording_id
-        from learning.recording_transcription_task t
+        from elevenlabs.recording_transcription_task t
         where t.recording_transcription_task_id = _recording_transcription_task_id
     );
 
@@ -654,15 +654,15 @@ begin
 
     num_failures := (
         select count(*)::integer
-        from learning.recording_transcription_attempt a
-        join learning.recording_transcription_attempt_failed f
+        from elevenlabs.recording_transcription_attempt a
+        join elevenlabs.recording_transcription_attempt_failed f
             on f.recording_transcription_attempt_id = a.recording_transcription_attempt_id
         where a.recording_transcription_task_id = _recording_transcription_task_id
     );
 
     num_attempts := (
         select count(*)::integer
-        from learning.recording_transcription_attempt a
+        from elevenlabs.recording_transcription_attempt a
         where a.recording_transcription_task_id = _recording_transcription_task_id
     );
 
@@ -681,7 +681,7 @@ begin
     );
 
     attempt_has_failed := exists (
-        select 1 from learning.recording_transcription_attempt_failed
+        select 1 from elevenlabs.recording_transcription_attempt_failed
         where recording_transcription_attempt_id = _current_attempt_id
     );
 end;
@@ -690,7 +690,7 @@ $$;
 -- effect: schedule supervisor recheck
 -- _time_waiting_seconds: tracks how long we've been waiting for webhook (for timeout)
 -- pass 0 to reset timer (after processing, failure, etc.)
-create or replace function learning.schedule_recording_transcription_supervisor_recheck(
+create or replace function elevenlabs.schedule_recording_transcription_supervisor_recheck(
     _recording_transcription_task_id bigint,
     _run_count integer,
     _current_attempt_id bigint default null,
@@ -710,7 +710,7 @@ begin
         'db_function',
         jsonb_build_object(
             'task_type', 'db_function',
-            'db_function', 'learning.recording_transcription_supervisor',
+            'db_function', 'elevenlabs.recording_transcription_supervisor',
             'recording_transcription_task_id', _recording_transcription_task_id,
             'run_count', _run_count + 1,
             'current_attempt_id', _current_attempt_id,
@@ -741,7 +741,7 @@ as $$
 $$;
 
 -- process transcription response: verifies signature, stores transcript
-create or replace function learning.process_recording_transcription_response(
+create or replace function elevenlabs.process_recording_transcription_response(
     _recording_transcription_attempt_id bigint
 )
 returns jsonb
@@ -750,8 +750,8 @@ security definer
 as $$
 declare
     _response elevenlabs.recording_transcription_response;
-    _attempt learning.recording_transcription_attempt;
-    _task learning.recording_transcription_task;
+    _attempt elevenlabs.recording_transcription_attempt;
+    _task elevenlabs.recording_transcription_task;
     _signing_secret text;
     _is_valid boolean;
     _transcription jsonb;
@@ -759,7 +759,7 @@ begin
     -- get response via attempt
     _response := elevenlabs.get_recording_transcription_response(_recording_transcription_attempt_id);
     if _response.recording_transcription_response_id is null then
-        raise warning 'learning.process_recording_transcription_response.invalid.response_not_found: %', _recording_transcription_attempt_id;
+        raise warning 'elevenlabs.process_recording_transcription_response.invalid.response_not_found: %', _recording_transcription_attempt_id;
         return jsonb_build_object(
             'status', 'failed',
             'reason', 'response_not_found'
@@ -769,8 +769,8 @@ begin
     -- get signing secret from config
     _signing_secret := internal.get_config('elevenlabs')->>'webhook_secret';
     if _signing_secret is null or _signing_secret = '' then
-        perform learning.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'missing_webhook_secret');
-        raise warning 'learning.process_recording_transcription_response.invalid.missing_webhook_secret: %', _recording_transcription_attempt_id;
+        perform elevenlabs.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'missing_webhook_secret');
+        raise warning 'elevenlabs.process_recording_transcription_response.invalid.missing_webhook_secret: %', _recording_transcription_attempt_id;
         return jsonb_build_object(
             'status', 'failed',
             'reason', 'missing_webhook_secret'
@@ -786,8 +786,8 @@ begin
     );
 
     if not _is_valid then
-        perform learning.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'invalid_signature');
-        raise warning 'learning.process_recording_transcription_response.invalid.invalid_signature: %', _recording_transcription_attempt_id;
+        perform elevenlabs.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'invalid_signature');
+        raise warning 'elevenlabs.process_recording_transcription_response.invalid.invalid_signature: %', _recording_transcription_attempt_id;
         return jsonb_build_object(
             'status', 'failed',
             'reason', 'invalid_signature'
@@ -797,8 +797,8 @@ begin
     -- extract transcription data
     _transcription := _response.raw_body::jsonb->'data'->'transcription';
     if _transcription is null then
-        perform learning.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'missing_transcription_data');
-        raise warning 'learning.process_recording_transcription_response.invalid.missing_transcription_data: %', _recording_transcription_attempt_id;
+        perform elevenlabs.record_recording_transcription_attempt_failure(_recording_transcription_attempt_id, 'missing_transcription_data');
+        raise warning 'elevenlabs.process_recording_transcription_response.invalid.missing_transcription_data: %', _recording_transcription_attempt_id;
         return jsonb_build_object(
             'status', 'failed',
             'reason', 'missing_transcription_data'
@@ -807,25 +807,25 @@ begin
 
     -- get attempt and task for recording_id
     _attempt := (
-        select a from learning.recording_transcription_attempt a
+        select a from elevenlabs.recording_transcription_attempt a
         where a.recording_transcription_attempt_id = _recording_transcription_attempt_id
     );
 
     _task := (
-        select t from learning.recording_transcription_task t
+        select t from elevenlabs.recording_transcription_task t
         where t.recording_transcription_task_id = _attempt.recording_transcription_task_id
     );
 
     -- check if transcript already exists
     if learning.has_recording_transcript(_task.profile_cue_recording_id) then
-        raise warning 'learning.process_recording_transcription_response.transcript_already_exists: %', _task.profile_cue_recording_id;
+        raise warning 'elevenlabs.process_recording_transcription_response.transcript_already_exists: %', _task.profile_cue_recording_id;
         return jsonb_build_object(
             'status', 'succeeded',
             'warning', 'transcript_already_exists'
         );
     end if;
 
-    -- store transcript
+    -- store transcript (in learning schema - this is the actual learning outcome)
     insert into learning.recording_transcript (
         profile_cue_recording_id,
         text,
@@ -848,7 +848,7 @@ $$;
 -- supervisor: main orchestration function
 -- =============================================================================
 
-create or replace function learning.recording_transcription_supervisor(
+create or replace function elevenlabs.recording_transcription_supervisor(
     _payload jsonb
 )
 returns jsonb
@@ -872,18 +872,18 @@ begin
     end if;
 
     if _run_count >= _max_runs then
-        raise exception 'learning.recording_transcription_supervisor.exceeded_max_runs'
+        raise exception 'elevenlabs.recording_transcription_supervisor.exceeded_max_runs'
             using detail = format('task_id=%s, run_count=%s', _recording_transcription_task_id, _run_count);
     end if;
 
     -- 2. LOCK
     perform 1
-    from learning.recording_transcription_task t
+    from elevenlabs.recording_transcription_task t
     where t.recording_transcription_task_id = _recording_transcription_task_id
     for update;
 
     -- 3. FACTS
-    _facts := learning.recording_transcription_supervisor_facts(
+    _facts := elevenlabs.recording_transcription_supervisor_facts(
         _recording_transcription_task_id,
         _current_attempt_id
     );
@@ -902,8 +902,8 @@ begin
 
     -- no active attempt -> schedule kickoff
     if _facts.num_attempts = _facts.num_failures then
-        _new_attempt_id := learning.schedule_recording_transcription_kickoff(_recording_transcription_task_id);
-        perform learning.schedule_recording_transcription_supervisor_recheck(
+        _new_attempt_id := elevenlabs.schedule_recording_transcription_kickoff(_recording_transcription_task_id);
+        perform elevenlabs.schedule_recording_transcription_supervisor_recheck(
             _recording_transcription_task_id, _run_count, _new_attempt_id, 0
         );
         return jsonb_build_object('status', 'kickoff_scheduled');
@@ -911,9 +911,9 @@ begin
 
     -- active attempt: response received -> process it
     if _facts.attempt_has_response then
-        perform learning.process_recording_transcription_response(_current_attempt_id);
+        perform elevenlabs.process_recording_transcription_response(_current_attempt_id);
         -- reschedule: next run will see transcript (success) or failure (new attempt)
-        perform learning.schedule_recording_transcription_supervisor_recheck(
+        perform elevenlabs.schedule_recording_transcription_supervisor_recheck(
             _recording_transcription_task_id, _run_count, null, 0
         );
         return jsonb_build_object('status', 'response_processed');
@@ -923,21 +923,21 @@ begin
     if _facts.attempt_has_request then
         -- check timeout
         if _time_waiting_seconds >= _max_wait_seconds then
-            perform learning.record_recording_transcription_attempt_failure(_current_attempt_id, 'webhook_timeout');
-            perform learning.schedule_recording_transcription_supervisor_recheck(
+            perform elevenlabs.record_recording_transcription_attempt_failure(_current_attempt_id, 'webhook_timeout');
+            perform elevenlabs.schedule_recording_transcription_supervisor_recheck(
                 _recording_transcription_task_id, _run_count, null, 0
             );
             return jsonb_build_object('status', 'webhook_timeout');
         end if;
         -- keep waiting
-        perform learning.schedule_recording_transcription_supervisor_recheck(
+        perform elevenlabs.schedule_recording_transcription_supervisor_recheck(
             _recording_transcription_task_id, _run_count, _current_attempt_id, _time_waiting_seconds
         );
         return jsonb_build_object('status', 'waiting_for_webhook');
     end if;
 
     -- active attempt: kickoff worker still running
-    perform learning.schedule_recording_transcription_supervisor_recheck(
+    perform elevenlabs.schedule_recording_transcription_supervisor_recheck(
         _recording_transcription_task_id, _run_count, _current_attempt_id, 0
     );
     return jsonb_build_object('status', 'kickoff_in_progress');
@@ -949,7 +949,7 @@ $$;
 -- =============================================================================
 
 -- facts: check if there's an in-progress transcription task
-create or replace function learning.has_in_progress_transcription_task(
+create or replace function elevenlabs.has_in_progress_transcription_task(
     _profile_cue_recording_id bigint
 )
 returns boolean
@@ -958,13 +958,13 @@ stable
 as $$
     select exists (
         select 1
-        from learning.recording_transcription_task t
+        from elevenlabs.recording_transcription_task t
         where t.profile_cue_recording_id = _profile_cue_recording_id
           and not learning.has_recording_transcript(_profile_cue_recording_id)
           and (
               select count(*)
-              from learning.recording_transcription_attempt a
-              join learning.recording_transcription_attempt_failed f
+              from elevenlabs.recording_transcription_attempt a
+              join elevenlabs.recording_transcription_attempt_failed f
                   on f.recording_transcription_attempt_id = a.recording_transcription_attempt_id
               where a.recording_transcription_task_id = t.recording_transcription_task_id
           ) < 2
@@ -1002,20 +1002,20 @@ begin
 
     -- 2. FACTS (check existing state)
 
-    -- check for existing transcript
+    -- check for existing transcript (in learning schema)
     if learning.has_recording_transcript(profile_cue_recording_id) then
         return jsonb_build_object('status', 'already_transcribed');
     end if;
 
     -- check for in-progress task
-    if learning.has_in_progress_transcription_task(profile_cue_recording_id) then
+    if elevenlabs.has_in_progress_transcription_task(profile_cue_recording_id) then
         return jsonb_build_object('status', 'in_progress');
     end if;
 
     -- 3. EFFECTS
 
     -- create new task
-    insert into learning.recording_transcription_task (profile_cue_recording_id, created_by)
+    insert into elevenlabs.recording_transcription_task (profile_cue_recording_id, created_by)
     values (profile_cue_recording_id, _authenticated_account_id)
     returning recording_transcription_task_id into _recording_transcription_task_id;
 
@@ -1024,7 +1024,7 @@ begin
         'db_function',
         jsonb_build_object(
             'task_type', 'db_function',
-            'db_function', 'learning.recording_transcription_supervisor',
+            'db_function', 'elevenlabs.recording_transcription_supervisor',
             'recording_transcription_task_id', _recording_transcription_task_id
         ),
         now()
@@ -1048,10 +1048,10 @@ grant execute on function api.eleven_labs_transcription_webhook(json) to anon;
 grant execute on function api.request_recording_transcription(bigint) to authenticated;
 
 -- worker service user grants
-grant execute on function learning.get_recording_transcription_kickoff_payload(jsonb) to worker_service_user;
-grant execute on function learning.record_recording_transcription_request_success(jsonb) to worker_service_user;
-grant execute on function learning.record_recording_transcription_request_failure(jsonb) to worker_service_user;
-grant execute on function learning.schedule_recording_transcription_kickoff(bigint) to worker_service_user;
-grant execute on function learning.schedule_recording_transcription_supervisor_recheck(bigint, integer, bigint, integer) to worker_service_user;
-grant execute on function learning.recording_transcription_supervisor(jsonb) to worker_service_user;
-grant execute on function learning.process_recording_transcription_response(bigint) to worker_service_user;
+grant execute on function elevenlabs.get_recording_transcription_kickoff_payload(jsonb) to worker_service_user;
+grant execute on function elevenlabs.record_recording_transcription_request_success(jsonb) to worker_service_user;
+grant execute on function elevenlabs.record_recording_transcription_request_failure(jsonb) to worker_service_user;
+grant execute on function elevenlabs.schedule_recording_transcription_kickoff(bigint) to worker_service_user;
+grant execute on function elevenlabs.schedule_recording_transcription_supervisor_recheck(bigint, integer, bigint, integer) to worker_service_user;
+grant execute on function elevenlabs.recording_transcription_supervisor(jsonb) to worker_service_user;
+grant execute on function elevenlabs.process_recording_transcription_response(bigint) to worker_service_user;
