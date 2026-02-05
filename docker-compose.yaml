@@ -146,14 +146,11 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
-      target: development
+      target: production
     container_name: web
     restart: unless-stopped
     ports:
       - "5173:5173"
-    volumes:
-      - ./web:/app
-      - /app/node_modules
     networks:
       - chattterbox-network
     labels:
