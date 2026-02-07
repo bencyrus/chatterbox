@@ -32,7 +32,6 @@ function MagicLinkPage() {
   const [pageState, setPageState] = useState<PageState>(token ? 'loading' : 'no-token');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
-  const [isInPWA, setIsInPWA] = useState<boolean>(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handle login
@@ -47,7 +46,6 @@ function MagicLinkPage() {
     try {
       // Check if running in PWA mode
       const inPWA = isPWAMode();
-      setIsInPWA(inPWA);
 
       // Login with magic token
       await authApi.loginWithMagicToken({ token });
