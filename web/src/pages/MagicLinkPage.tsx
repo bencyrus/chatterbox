@@ -30,6 +30,7 @@ function MagicLinkPage() {
 
   const [pageState, setPageState] = useState<PageState>(token ? 'loading' : 'no-token');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handle login
@@ -81,11 +82,7 @@ function MagicLinkPage() {
         }
         
         setPageState('success');
-        
-        // Redirect to app after a short delay
-        setTimeout(() => {
-          navigate(ROUTES.APP, { replace: true });
-        }, 1500);
+        setRedirectCountdown(3);
       } else {
         throw new Error('Failed to get account info');
       }
@@ -114,11 +111,34 @@ function MagicLinkPage() {
   }, [token, handleLogin]);
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Effect: Countdown after success
+  // ─────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (pageState !== 'success' || redirectCountdown === null) {
+      return;
+    }
+
+    if (redirectCountdown <= 0) {
+      navigate(ROUTES.APP, { replace: true });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setRedirectCountdown((current) =>
+        current === null ? null : current - 1
+      );
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [pageState, redirectCountdown, navigate]);
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Handle navigation
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleGoToLogin = useCallback(() => {
-    navigate(ROUTES.LOGIN, { replace: true });
+    navigate(ROUTES.LOGIN);
   }, [navigate]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -138,8 +158,9 @@ function MagicLinkPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-page bg-surface-primary">
-      <div className="w-full max-w-sm text-center animate-fade-in">
+    <div className="min-h-screen flex flex-col bg-app-sand">
+      <div className="flex-1 flex items-center justify-center px-page">
+      <div className="w-full max-w-sm text-center animate-fade-in bg-white rounded-3xl shadow-card border border-border-secondary p-8">
         {/* App icon */}
         <img
           src="https://storage.googleapis.com/chatterbox-public-assets/public-chatterbox-logo-color-bg.png"
@@ -163,14 +184,15 @@ function MagicLinkPage() {
         {/* Success state */}
         {pageState === 'success' && (
           <>
-            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-status-success/10 flex items-center justify-center">
-              <HiOutlineCheckCircle className="w-8 h-8 text-status-success" />
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-app-green/20 flex items-center justify-center">
+              <HiOutlineCheckCircle className="w-8 h-8 text-app-green-dark" />
             </div>
             <h1 className="text-heading-lg font-semibold text-text-primary mb-2">
               Welcome back!
             </h1>
             <p className="text-body-md text-text-secondary">
-              You've been signed in successfully. Redirecting...
+              You've been signed in successfully. Redirecting in{' '}
+              {redirectCountdown ?? 3} seconds.
             </p>
           </>
         )}
@@ -178,8 +200,8 @@ function MagicLinkPage() {
         {/* Error state */}
         {pageState === 'error' && (
           <>
-            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-status-error/10 flex items-center justify-center">
-              <HiOutlineExclamationTriangle className="w-8 h-8 text-status-error" />
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-error-100 flex items-center justify-center">
+              <HiOutlineExclamationTriangle className="w-8 h-8 text-error-600" />
             </div>
             <h1 className="text-heading-lg font-semibold text-text-primary mb-2">
               Unable to sign in
@@ -189,6 +211,7 @@ function MagicLinkPage() {
             </p>
             <Button
               variant="primary"
+              className="bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
               onClick={handleGoToLogin}
             >
               Request new link
@@ -209,14 +232,14 @@ function MagicLinkPage() {
               <Button
                 variant="primary"
                 onClick={handleOpenApp}
-                className="w-full"
+                className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
               >
                 Open in Chatterbox app
               </Button>
               <Button
                 variant="secondary"
                 onClick={handleGoToLogin}
-                className="w-full"
+                className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
               >
                 Continue on web
               </Button>
@@ -227,6 +250,7 @@ function MagicLinkPage() {
             </p>
           </>
         )}
+      </div>
       </div>
     </div>
   );
