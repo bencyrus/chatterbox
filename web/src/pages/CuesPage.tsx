@@ -1,11 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { HiOutlineArrowPath } from 'react-icons/hi2';
-import { PageHeader } from '../components/layout/PageHeader';
+import { useAppHeader } from '../components/layout/AppHeader';
 import { Button } from '../components/ui/Button';
 import { CueList } from '../components/cues/CueList';
 import { useCues } from '../hooks/cues/useCues';
-import { useProfile } from '../contexts/ProfileContext';
-import { LANGUAGE_NAMES } from '../lib/constants';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CUES PAGE
@@ -13,12 +11,6 @@ import { LANGUAGE_NAMES } from '../lib/constants';
 
 function CuesPage() {
   const { cues, isLoading, isShuffling, error, refresh, shuffle } = useCues();
-  const { activeProfile } = useProfile();
-
-  // Get profile language name for subtitle
-  const languageName = activeProfile?.languageCode
-    ? LANGUAGE_NAMES[activeProfile.languageCode] || activeProfile.languageCode
-    : '';
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handlers
@@ -32,34 +24,35 @@ function CuesPage() {
   // Shuffle button
   // ─────────────────────────────────────────────────────────────────────────
 
-  const shuffleButton = (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={handleShuffle}
-      isLoading={isShuffling}
-      disabled={isLoading}
-      aria-label="Shuffle cues"
-      className="!p-2"
-    >
-      {!isShuffling && (
-        <HiOutlineArrowPath className="w-5 h-5" />
-      )}
-    </Button>
+  const shuffleButton = useMemo(
+    () => (
+      <Button
+        variant="primary"
+        size="lg"
+        onClick={handleShuffle}
+        isLoading={isShuffling}
+        disabled={isLoading}
+        className="rounded-full !bg-neutral-900 !text-white hover:!bg-black active:!bg-black"
+        leftIcon={!isShuffling ? <HiOutlineArrowPath className="w-5 h-5" /> : undefined}
+      >
+        Shuffle
+      </Button>
+    ),
+    [handleShuffle, isShuffling, isLoading]
   );
 
   // ─────────────────────────────────────────────────────────────────────────
+  useAppHeader({
+    title: 'Subjects',
+    showBack: false,
+    rightAction: shuffleButton,
+  });
+
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div>
-      <PageHeader
-        title="Practice"
-        subtitle={languageName}
-        rightAction={shuffleButton}
-      />
-      
       <div className="container-page py-4">
         <CueList
           cues={cues}

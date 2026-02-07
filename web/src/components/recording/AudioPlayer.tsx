@@ -55,11 +55,11 @@ export function AudioPlayer({
         className={cn(
           'w-10 h-10 flex-shrink-0 rounded-full',
           'flex items-center justify-center',
-          'bg-brand-primary text-white',
-          'hover:bg-brand-secondary',
+          'bg-app-green-strong text-white',
+          'hover:bg-app-green-dark',
           'transition-colors duration-150',
           'disabled:opacity-50 disabled:cursor-not-allowed',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2'
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green-strong focus-visible:ring-offset-2'
         )}
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >

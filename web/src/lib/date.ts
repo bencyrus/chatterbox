@@ -30,20 +30,30 @@ function isToday(date: Date): boolean {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Get a date group key for grouping recordings by date
- * Returns: "Today", "Yesterday", or "Jan 15, 2024"
+ * Get a date group key and label for grouping recordings by date
+ * Returns: { key: "2024-01-15", label: "Today" | "Yesterday" | "Jan 15, 2024" }
  */
-export function getDateGroupKey(date: Date | string): string {
+export function getDateGroupKey(date: Date | string): { key: string; label: string } {
   const d = typeof date === 'string' ? new Date(date) : date;
   
-  if (isToday(d)) return 'Today';
-  if (isYesterday(d)) return 'Yesterday';
+  // Key for sorting (YYYY-MM-DD)
+  const key = d.toISOString().split('T')[0];
   
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(d);
+  // Label for display
+  let label: string;
+  if (isToday(d)) {
+    label = 'Today';
+  } else if (isYesterday(d)) {
+    label = 'Yesterday';
+  } else {
+    label = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d);
+  }
+  
+  return { key, label };
 }
 
 /**
@@ -127,10 +137,13 @@ export function parseDuration(value: string | number): number {
   const str = value.trim();
   
   // Try parsing as a number string first (e.g., "90" or "90.5")
-  const numValue = parseFloat(str);
-  if (!isNaN(numValue) && !/[:.].*:/.test(str)) {
-    // It's a plain number string, treat as seconds
-    return numValue * 1000;
+  // But only if it doesn't contain a colon (which indicates time format)
+  if (!str.includes(':')) {
+    const numValue = parseFloat(str);
+    if (!isNaN(numValue)) {
+      // It's a plain number string, treat as seconds
+      return numValue * 1000;
+    }
   }
   
   // Try parsing as time format (HH:MM:SS, MM:SS, or H:MM:SS)

@@ -36,7 +36,7 @@ export function Progress({
     >
       <div
         className={cn(
-          'h-full bg-brand-500 rounded-full transition-all duration-200',
+          'h-full bg-success-600 rounded-full transition-all duration-200',
           barClassName
         )}
         style={{ width: `${percentage}%` }}
@@ -94,7 +94,7 @@ export function AudioProgress({
       )}
     >
       <div
-        className="h-full bg-brand-500 rounded-full transition-all duration-100 group-hover:bg-brand-600"
+        className="h-full bg-success-600 rounded-full transition-all duration-100 group-hover:bg-success-700"
         style={{ width: `${percentage}%` }}
       />
     </div>

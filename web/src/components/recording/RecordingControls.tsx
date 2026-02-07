@@ -132,7 +132,7 @@ export function RecordingControls({
         )}
       >
         <p className="text-body-md text-text-secondary">Saving recording...</p>
-        <Progress progress={uploadProgress / 100} className="w-48" />
+        <Progress value={uploadProgress} className="w-48" />
       </div>
     );
   }
@@ -163,14 +163,14 @@ export function RecordingControls({
           <Button
             variant="secondary"
             onClick={handleDiscard}
-            iconLeft={<HiOutlineTrash className="w-5 h-5" />}
+            leftIcon={<HiOutlineTrash className="w-5 h-5" />}
           >
             Discard
           </Button>
           <Button
             variant="primary"
             onClick={handleSave}
-            iconLeft={<HiOutlineArrowUpTray className="w-5 h-5" />}
+            leftIcon={<HiOutlineArrowUpTray className="w-5 h-5" />}
           >
             Save
           </Button>

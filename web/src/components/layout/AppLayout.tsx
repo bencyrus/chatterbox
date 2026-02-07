@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
+import { AppHeader, AppHeaderProvider } from './AppHeader';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // APP LAYOUT
@@ -11,14 +12,18 @@ import { BottomNav } from './BottomNav';
  */
 export function AppLayout() {
   return (
-    <div className="min-h-screen bg-surface-primary flex flex-col">
-      {/* Main content area */}
-      <main className="flex-1 pb-20">
-        <Outlet />
-      </main>
-      
-      {/* Bottom navigation */}
-      <BottomNav />
-    </div>
+    <AppHeaderProvider>
+      <div className="min-h-screen bg-app-sand-light flex flex-col">
+        <AppHeader />
+
+        {/* Main content area */}
+        <main className="flex-1 pb-20">
+          <Outlet />
+        </main>
+
+        {/* Bottom navigation */}
+        <BottomNav />
+      </div>
+    </AppHeaderProvider>
   );
 }

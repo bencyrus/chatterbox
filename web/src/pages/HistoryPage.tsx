@@ -1,14 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { HiOutlineClock } from 'react-icons/hi2';
-import { PageHeader } from '../components/layout/PageHeader';
+import { PiWaveformLight } from 'react-icons/pi';
+import { useAppHeader } from '../components/layout/AppHeader';
 import { RecordingGroup } from '../components/history/RecordingGroup';
 import { RecordingCardSkeleton } from '../components/history/RecordingCardSkeleton';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { Spinner } from '../components/ui/Spinner';
 import { useRecordingHistory } from '../hooks/history/useRecordingHistory';
-import { useProfile } from '../contexts/ProfileContext';
-import { LANGUAGE_NAMES } from '../lib/constants';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HISTORY PAGE
@@ -25,13 +23,8 @@ function HistoryPage() {
     loadMore,
   } = useRecordingHistory();
   
-  const { activeProfile } = useProfile();
   const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  // Get profile language name for subtitle
-  const languageName = activeProfile?.languageCode
-    ? LANGUAGE_NAMES[activeProfile.languageCode] || activeProfile.languageCode
-    : '';
+  useAppHeader({ title: 'Recording History', showBack: false });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Infinite scroll
@@ -63,7 +56,6 @@ function HistoryPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="History" subtitle={languageName} />
         <div className="container-page py-4 space-y-6">
           {/* Skeleton groups */}
           <div className="space-y-3">
@@ -90,7 +82,6 @@ function HistoryPage() {
   if (error) {
     return (
       <div>
-        <PageHeader title="History" subtitle={languageName} />
         <ErrorState
           title="Couldn't load history"
           message={error}
@@ -107,9 +98,8 @@ function HistoryPage() {
   if (groups.length === 0) {
     return (
       <div>
-        <PageHeader title="History" subtitle={languageName} />
         <EmptyState
-          icon={<HiOutlineClock className="w-12 h-12" />}
+          icon={<PiWaveformLight className="w-12 h-12" />}
           title="No recordings yet"
           description="Your practice recordings will appear here. Start by recording yourself on the Practice tab."
         />
@@ -123,13 +113,11 @@ function HistoryPage() {
 
   return (
     <div>
-      <PageHeader title="History" subtitle={languageName} />
-      
-      <div className="container-page py-4 space-y-8">
+      <div className="container-page py-4 space-y-6">
         {/* Recording groups */}
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <RecordingGroup
-            key={group.key}
+            key={`${group.key}-${index}`}
             label={group.label}
             recordings={group.recordings}
           />

@@ -50,38 +50,48 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'bg-surface-primary/95 backdrop-blur-sm',
-        'px-page py-4',
+        'bg-app-sand-light/95 backdrop-blur-sm',
+        'h-16',
         sticky && 'sticky top-0 z-sticky',
         className
       )}
     >
-      <div className="flex items-center justify-between">
+      <div className="max-w-3xl mx-auto px-page-x h-full grid grid-cols-[auto,1fr,auto] items-center gap-3">
         {/* Left: Back button or spacer */}
-        <div className="w-10 flex-shrink-0">
+        <div
+          className={cn(
+            'flex items-center',
+            showBack ? 'min-w-0' : 'w-0 overflow-hidden'
+          )}
+        >
           {showBack && (
             <button
               type="button"
               onClick={handleBack}
               className={cn(
-                'w-10 h-10 -ml-2 flex items-center justify-center',
-                'rounded-full',
-                'text-text-secondary hover:text-text-primary',
-                'hover:bg-surface-secondary',
-                'transition-colors duration-150'
+                'flex items-center gap-1.5 py-2.5 pl-2 pr-3 -ml-2',
+                'rounded-full min-h-[44px]',
+                'bg-white text-text-primary font-medium',
+                'hover:bg-black/10',
+                'active:bg-black/10',
+                'transition-colors duration-150',
+                'shadow-sm'
               )}
               aria-label="Go back"
             >
-              <HiOutlineChevronLeft className="w-6 h-6" />
+              <HiOutlineChevronLeft className="w-5 h-5 shrink-0" />
+              <span className="text-body-md">Back</span>
             </button>
           )}
         </div>
 
         {/* Center: Title and subtitle */}
-        <div className="flex-1 text-center min-w-0">
-          <h1 className="text-heading-md font-semibold text-text-primary truncate">
-            {title}
-          </h1>
+        <div className="flex-1 text-left min-w-0 flex items-center">
+          {title && (
+            <h1 className="text-heading-md font-semibold text-text-primary truncate">
+              {title}
+            </h1>
+          )}
           {subtitle && (
             <p className="text-body-sm text-text-secondary mt-0.5 truncate">
               {subtitle}
@@ -90,7 +100,7 @@ export function PageHeader({
         </div>
 
         {/* Right: Action or spacer */}
-        <div className="w-10 flex-shrink-0 flex justify-end">
+        <div className="flex items-center justify-end min-w-0">
           {rightAction}
         </div>
       </div>

@@ -41,7 +41,7 @@ export function RecordButton({
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
         isRecording
           ? 'bg-recording-active focus-visible:ring-recording-active'
-          : 'bg-brand-primary hover:bg-brand-secondary focus-visible:ring-brand-primary',
+          : 'bg-app-green-strong hover:bg-app-green-dark focus-visible:ring-app-green-strong',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}

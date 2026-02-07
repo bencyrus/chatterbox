@@ -158,7 +158,7 @@ function MagicLinkPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col bg-app-sand">
+    <div className="min-h-screen flex flex-col bg-app-sand-light">
       <div className="flex-1 flex items-center justify-center px-page">
       <div className="w-full max-w-sm text-center animate-fade-in bg-white rounded-3xl shadow-card border border-border-secondary p-8">
         {/* App icon */}

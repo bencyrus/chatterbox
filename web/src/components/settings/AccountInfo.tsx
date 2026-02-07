@@ -31,7 +31,7 @@ export function AccountInfo({ account, className }: AccountInfoProps) {
           <div
             className={cn(
               'w-14 h-14 rounded-full flex items-center justify-center',
-              'bg-brand-primary/10 text-brand-primary'
+              'bg-app-green/20 text-app-green-strong'
             )}
           >
             <HiOutlineUser className="w-7 h-7" />

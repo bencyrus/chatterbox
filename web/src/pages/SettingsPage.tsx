@@ -5,7 +5,7 @@ import {
   HiOutlineTrash,
   HiOutlineShieldCheck,
 } from 'react-icons/hi2';
-import { PageHeader } from '../components/layout/PageHeader';
+import { useAppHeader } from '../components/layout/AppHeader';
 import { Modal, ModalFooter } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
 import {
@@ -24,6 +24,7 @@ import { ROUTES } from '../lib/constants';
 // ═══════════════════════════════════════════════════════════════════════════
 
 function SettingsPage() {
+  useAppHeader({ title: 'Settings', showBack: false });
   const { account } = useAuth();
   const { activeProfile } = useProfile();
   const {
@@ -75,8 +76,6 @@ function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Settings" />
-
       <div className="container-page py-6 space-y-8">
         {/* Account section */}
         <SettingsSection title="Account">
@@ -98,7 +97,7 @@ function SettingsPage() {
 
         {/* Legal section */}
         <SettingsSection title="Legal">
-          <Link to={ROUTES.PRIVACY}>
+          <Link to={ROUTES.PRIVACY} target="_blank" rel="noopener noreferrer">
             <SettingsRow
               icon={<HiOutlineShieldCheck className="w-5 h-5" />}
               label="Privacy Policy"

@@ -1,19 +1,20 @@
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import { HiOutlineDocumentText } from 'react-icons/hi2';
-import { PageHeader } from '../components/layout/PageHeader';
+import { useAppHeader } from '../components/layout/AppHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/feedback/ErrorState';
+import { CueContentMarkdown } from '../components/cues/CueContentMarkdown';
 import { AudioPlayer } from '../components/recording/AudioPlayer';
 import { TranscriptBadge } from '../components/history/TranscriptBadge';
 import { recordingsApi } from '../services/recordings';
 import { useTranscription } from '../hooks/history/useTranscription';
 import { useProfile } from '../contexts/ProfileContext';
 import { ApiError } from '../services/api';
-import { formatDateTime, parseDuration } from '../lib/date';
-import { LANGUAGE_NAMES } from '../lib/constants';
+import { parseDuration } from '../lib/date';
+import { ROUTES } from '../lib/constants';
 import type { Recording, ProcessedFile } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23,7 +24,12 @@ import type { Recording, ProcessedFile } from '../types';
 function RecordingDetailPage() {
   const { recordingId } = useParams<{ recordingId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const { activeProfile } = useProfile();
+
+  const handleBack = useCallback(() => {
+    navigate(ROUTES.HISTORY);
+  }, [navigate]);
 
   // Recording can be passed via location state or fetched from history
   const [recording, setRecording] = useState<Recording | null>(
@@ -120,19 +126,11 @@ function RecordingDetailPage() {
   // Get recording info
   // ─────────────────────────────────────────────────────────────────────────
 
-  const cueText = recording?.cue?.content?.title || 'Recording';
-  const languageCode = recording?.cue?.content?.languageCode;
-  const languageName = languageCode
-    ? LANGUAGE_NAMES[languageCode] || languageCode
-    : '';
+  useAppHeader({ title: '', showBack: true, onBack: handleBack });
   
   // Get duration from file metadata
   const durationStr = recording?.file?.metadata?.duration;
   const durationMs = durationStr ? parseDuration(durationStr) : 0;
-  
-  const createdAt = recording?.createdAt
-    ? formatDateTime(recording.createdAt)
-    : '';
   
   // Find the audio URL from processed files
   const audioFile = processedFiles.find(
@@ -147,7 +145,6 @@ function RecordingDetailPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Recording" showBack />
         <div className="container-page flex items-center justify-center py-20">
           <Spinner size="lg" />
         </div>
@@ -162,7 +159,6 @@ function RecordingDetailPage() {
   if (error || !recording) {
     return (
       <div>
-        <PageHeader title="Recording" showBack />
         <ErrorState
           title="Couldn't load recording"
           message={error || 'The recording could not be found.'}
@@ -178,24 +174,15 @@ function RecordingDetailPage() {
 
   return (
     <div>
-      <PageHeader
-        title={languageName || 'Recording'}
-        subtitle={createdAt}
-        showBack
-      />
-
       <div className="container-page py-6 space-y-6">
-        {/* Cue prompt */}
+        {/* Cue prompt (markdown) */}
         <Card>
           <CardContent className="py-6">
-            <p className="text-heading-md font-semibold text-text-primary text-center leading-relaxed">
-              {cueText}
-            </p>
-            {recording.cue?.content?.details && (
-              <p className="text-body-md text-text-secondary mt-2 text-center">
-                {recording.cue.content.details}
-              </p>
-            )}
+            <CueContentMarkdown
+              title={recording.cue?.content?.title}
+              details={recording.cue?.content?.details}
+              className="text-body-md"
+            />
           </CardContent>
         </Card>
 

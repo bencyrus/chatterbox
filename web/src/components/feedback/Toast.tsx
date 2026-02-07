@@ -38,10 +38,10 @@ const iconMap: Record<ToastType, React.ReactNode> = {
 };
 
 const colorMap: Record<ToastType, string> = {
-  success: 'bg-status-success text-white',
-  error: 'bg-status-error text-white',
-  warning: 'bg-status-warning text-white',
-  info: 'bg-brand-primary text-white',
+  success: 'bg-success-600 text-white',
+  error: 'bg-error-600 text-white',
+  warning: 'bg-warning-600 text-white',
+  info: 'bg-app-green-strong text-white',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════

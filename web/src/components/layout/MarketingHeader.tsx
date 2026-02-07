@@ -8,12 +8,17 @@ import { ROUTES } from '../../lib/constants';
 interface MarketingHeaderProps {
   actions?: React.ReactNode[];
   sticky?: boolean;
+  className?: string;
 }
 
-export function MarketingHeader({ actions, sticky = true }: MarketingHeaderProps) {
+export function MarketingHeader({
+  actions,
+  sticky = true,
+  className,
+}: MarketingHeaderProps) {
   return (
     <header
-      className={`bg-white border-b border-border-secondary ${
+      className={`${className ?? 'bg-white'} border-b border-border-secondary ${
         sticky ? 'sticky top-0 z-sticky' : ''
       }`}
     >

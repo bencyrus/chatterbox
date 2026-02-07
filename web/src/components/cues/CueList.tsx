@@ -90,7 +90,7 @@ export function CueList({
   return (
     <div className={cn('space-y-3', className)}>
       {cues.map((cue) => (
-        <CueCard key={cue.id} cue={cue} />
+        <CueCard key={cue.cueId} cue={cue} />
       ))}
     </div>
   );

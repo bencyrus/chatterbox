@@ -52,70 +52,107 @@ function AppBootstrap() {
   // Initialize auth state on mount
   useBootstrap();
 
+  const lazyFallback = (
+    <LoadingScreen message="Loading..." fullScreen={false} />
+  );
+
   return (
     <>
       <ToastContainer />
-      <Suspense fallback={<LoadingScreen message="Loading..." />}>
-        <Routes>
-          {/* ─────────────────────────────────────────────────────────────────
-              PUBLIC ROUTES
-          ───────────────────────────────────────────────────────────────── */}
-          {/* Home / Landing page */}
-          <Route path={ROUTES.HOME} element={<HomePage />} />
+      <Routes>
+        {/* ─────────────────────────────────────────────────────────────────
+            PUBLIC ROUTES
+        ───────────────────────────────────────────────────────────────── */}
+        {/* Home / Landing page */}
+        <Route path={ROUTES.HOME} element={<HomePage />} />
 
-          {/* Login - redirects to app if already authenticated */}
+        {/* Login - redirects to app if already authenticated */}
+        <Route
+          path={ROUTES.LOGIN}
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+
+        {/* Magic link callback */}
+        <Route path={ROUTES.MAGIC_LINK} element={<MagicLinkPage />} />
+
+        {/* Static pages */}
+        <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+        <Route
+          path={ROUTES.REQUEST_ACCOUNT_RESTORE}
+          element={<RequestAccountRestorePage />}
+        />
+
+        {/* ─────────────────────────────────────────────────────────────────
+            PROTECTED ROUTES (under /app)
+        ───────────────────────────────────────────────────────────────── */}
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
+          {/* /app -> redirect to /app/cues */}
+          <Route index element={<Navigate to={ROUTES.CUES} replace />} />
+
+          {/* Cues / Practice */}
           <Route
-            path={ROUTES.LOGIN}
+            path="cues"
             element={
-              <PublicOnlyRoute>
-                <LoginPage />
-              </PublicOnlyRoute>
+              <Suspense fallback={lazyFallback}>
+                <CuesPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="cues/:cueId"
+            element={
+              <Suspense fallback={lazyFallback}>
+                <CueDetailPage />
+              </Suspense>
             }
           />
 
-          {/* Magic link callback */}
-          <Route path={ROUTES.MAGIC_LINK} element={<MagicLinkPage />} />
-
-          {/* Static pages */}
-          <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
+          {/* History */}
           <Route
-            path={ROUTES.REQUEST_ACCOUNT_RESTORE}
-            element={<RequestAccountRestorePage />}
+            path="history"
+            element={
+              <Suspense fallback={lazyFallback}>
+                <HistoryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="history/:recordingId"
+            element={
+              <Suspense fallback={lazyFallback}>
+                <RecordingDetailPage />
+              </Suspense>
+            }
           />
 
-          {/* ─────────────────────────────────────────────────────────────────
-              PROTECTED ROUTES (under /app)
-          ───────────────────────────────────────────────────────────────── */}
+          {/* Settings */}
           <Route
-            path="/app"
+            path="settings"
             element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
+              <Suspense fallback={lazyFallback}>
+                <SettingsPage />
+              </Suspense>
             }
-          >
-            {/* /app -> redirect to /app/cues */}
-            <Route index element={<Navigate to={ROUTES.CUES} replace />} />
+          />
+        </Route>
 
-            {/* Cues / Practice */}
-            <Route path="cues" element={<CuesPage />} />
-            <Route path="cues/:cueId" element={<CueDetailPage />} />
-
-            {/* History */}
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="history/:recordingId" element={<RecordingDetailPage />} />
-
-            {/* Settings */}
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-
-          {/* ─────────────────────────────────────────────────────────────────
-              FALLBACK
-          ───────────────────────────────────────────────────────────────── */}
-          {/* Catch-all redirect to home */}
-          <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
-        </Routes>
-      </Suspense>
+        {/* ─────────────────────────────────────────────────────────────────
+            FALLBACK
+        ───────────────────────────────────────────────────────────────── */}
+        {/* Catch-all redirect to home */}
+        <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+      </Routes>
     </>
   );
 }

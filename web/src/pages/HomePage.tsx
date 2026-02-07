@@ -32,8 +32,8 @@ const headerActions = [
  */
 function HomePage() {
   return (
-    <div className="min-h-screen bg-surface-primary">
-      <MarketingHeader actions={headerActions} />
+    <div className="min-h-screen bg-app-sand-light">
+      <MarketingHeader actions={headerActions} className="bg-app-sand-light" />
 
       <main className="max-w-6xl mx-auto px-6 pb-16">
         <section className="py-12 max-w-2xl">
@@ -58,47 +58,55 @@ function HomePage() {
         </section>
 
         <section className="grid gap-4 max-w-3xl">
-          <div className="rounded-2xl bg-app-beige p-5">
-            <p className="text-body-md text-text-primary font-medium flex items-center gap-2">
-              <HiOutlineRectangleStack className="w-5 h-5 text-app-green-strong shrink-0" />
-              Choose a cue card
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              Pick a subject to talk about and open it when you are ready.
-            </p>
+          <div className="rounded-2xl bg-app-beige p-5 flex items-center gap-3">
+            <HiOutlineRectangleStack className="w-6 h-6 text-app-green-strong shrink-0 self-center" />
+            <div>
+              <p className="text-body-md text-text-primary font-medium">
+                Choose a cue card
+              </p>
+              <p className="text-body-sm text-text-secondary">
+                Pick a subject to talk about and open it when you are ready.
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-app-beige p-5">
-            <p className="text-body-md text-text-primary font-medium flex items-center gap-2">
-              <HiOutlineMicrophone className="w-5 h-5 text-app-green-strong shrink-0" />
-              Record your response
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              Speak naturally, then replay to hear yourself.
-            </p>
+          <div className="rounded-2xl bg-app-beige p-5 flex items-center gap-3">
+            <HiOutlineMicrophone className="w-6 h-6 text-app-green-strong shrink-0 self-center" />
+            <div>
+              <p className="text-body-md text-text-primary font-medium">
+                Record your response
+              </p>
+              <p className="text-body-sm text-text-secondary">
+                Speak naturally, then replay to hear yourself.
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-app-beige p-5">
-            <p className="text-body-md text-text-primary font-medium flex items-center gap-2">
-              <HiOutlineClock className="w-5 h-5 text-app-green-strong shrink-0" />
-              Review your history
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              Access past recordings whenever you want.
-            </p>
+          <div className="rounded-2xl bg-app-beige p-5 flex items-center gap-3">
+            <HiOutlineClock className="w-6 h-6 text-app-green-strong shrink-0 self-center" />
+            <div>
+              <p className="text-body-md text-text-primary font-medium">
+                Review your history
+              </p>
+              <p className="text-body-sm text-text-secondary">
+                Access past recordings whenever you want.
+              </p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-app-beige p-5">
-            <p className="text-body-md text-text-primary font-medium flex items-center gap-2">
-              <HiOutlineDocumentChartBar className="w-5 h-5 text-app-green-strong shrink-0" />
-              Get a progress report
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              See what improved, repeated mistakes, and try the same subject
-              later to measure progress.
-            </p>
+          <div className="rounded-2xl bg-app-beige p-5 flex items-center gap-3">
+            <HiOutlineDocumentChartBar className="w-6 h-6 text-app-green-strong shrink-0 self-center" />
+            <div>
+              <p className="text-body-md text-text-primary font-medium">
+                Get a progress report
+              </p>
+              <p className="text-body-sm text-text-secondary">
+                See what improved, repeated mistakes, and try the same subject
+                later to measure progress.
+              </p>
+            </div>
           </div>
         </section>
       </main>
 
-      <footer className="border-t border-border-secondary bg-white">
+      <footer className="border-t border-border-secondary bg-app-sand-light">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <p className="text-body-sm text-text-tertiary">
             Chatterbox - speak with confidence, every day.

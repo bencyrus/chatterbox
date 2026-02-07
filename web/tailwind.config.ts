@@ -38,7 +38,9 @@ export default {
           'blue-dark': '#8f9bb8',
           beige: '#f7e4d6',
           'beige-dark': '#e5d2c4',
+          'beige-hover': '#ecd5c7',
           sand: '#eeeee6',
+          'sand-light': '#f5f4ee',
         },
         
         // Semantic Colors

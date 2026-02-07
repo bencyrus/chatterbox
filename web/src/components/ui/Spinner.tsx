@@ -29,7 +29,7 @@ export function Spinner({ size = 'md', className }: SpinnerProps) {
   return (
     <svg
       className={cn(
-        'animate-spin text-brand-500',
+        'animate-spin text-success-600',
         sizeStyles[size],
         className
       )}

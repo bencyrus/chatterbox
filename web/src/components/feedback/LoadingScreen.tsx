@@ -27,7 +27,7 @@ export function LoadingScreen({
     <div
       className={cn(
         'flex flex-col items-center justify-center',
-        fullScreen && 'min-h-screen bg-surface-primary',
+        fullScreen && 'min-h-screen bg-app-sand-light',
         !fullScreen && 'py-12',
         className
       )}

@@ -54,7 +54,7 @@ export function SettingsRow({
           <span
             className={cn(
               'w-6 h-6 flex items-center justify-center',
-              danger ? 'text-status-error' : 'text-text-secondary'
+              danger ? 'text-error-500' : 'text-text-secondary'
             )}
           >
             {icon}
@@ -65,7 +65,7 @@ export function SettingsRow({
         <span
           className={cn(
             'flex-1 text-body-md',
-            danger ? 'text-status-error' : 'text-text-primary'
+            danger ? 'text-error-500' : 'text-text-primary'
           )}
         >
           {label}
@@ -83,7 +83,7 @@ export function SettingsRow({
           <HiOutlineChevronRight
             className={cn(
               'w-5 h-5',
-              danger ? 'text-status-error' : 'text-text-tertiary'
+              danger ? 'text-error-500' : 'text-text-tertiary'
             )}
           />
         )}

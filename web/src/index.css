@@ -39,11 +39,11 @@
   /* ═══════════════════════════════════════════════════════════════════ */
   
   .card-base {
-    @apply bg-surface rounded-card shadow-card border border-border p-card;
+    @apply bg-app-beige rounded-card p-card;
   }
   
   .card-interactive {
-    @apply card-base cursor-pointer transition-shadow hover:shadow-card-hover active:shadow-card;
+    @apply card-base cursor-pointer transition-colors hover:bg-app-beige-hover;
   }
   
   /* ═══════════════════════════════════════════════════════════════════ */

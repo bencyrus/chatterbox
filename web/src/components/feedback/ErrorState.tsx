@@ -36,8 +36,8 @@ export function ErrorState({
       )}
     >
       {/* Icon */}
-      <div className="w-16 h-16 mb-4 rounded-full bg-status-error/10 flex items-center justify-center">
-        <HiOutlineExclamationTriangle className="w-8 h-8 text-status-error" />
+      <div className="w-16 h-16 mb-4 rounded-full bg-error-100 flex items-center justify-center">
+        <HiOutlineExclamationTriangle className="w-8 h-8 text-error-500" />
       </div>
 
       {/* Title */}
