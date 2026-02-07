@@ -32,6 +32,8 @@ export default {
           green: '#b3cbc0',
           'green-dark': '#7fa395',
           'green-strong': '#5f7f73',
+          'green-deep': '#4a655c',
+          'green-mid': '#55756a',
           blue: '#bec8e3',
           'blue-dark': '#8f9bb8',
           beige: '#f7e4d6',
@@ -65,9 +67,9 @@ export default {
         success: {
           50:  '#f0fdf4',
           100: '#dcfce7',
-          500: '#b3cbc0',
-          600: '#7fa395',
-          700: '#7fa395',
+          500: '#7fa395',
+          600: '#5f7f73',
+          700: '#4a655c',
         },
         
         warning: {

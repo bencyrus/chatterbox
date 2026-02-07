@@ -65,8 +65,9 @@ function LoginPage() {
 
   if (emailSent && !error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-page bg-surface-primary">
-        <div className="w-full max-w-sm text-center animate-fade-in">
+      <div className="min-h-screen flex flex-col bg-app-sand">
+        <div className="flex-1 flex items-center justify-center px-page">
+        <div className="w-full max-w-sm text-center animate-fade-in bg-white rounded-3xl shadow-card border border-border-secondary p-8">
           {/* App icon */}
           <img
             src="https://storage.googleapis.com/chatterbox-public-assets/public-chatterbox-logo-color-bg.png"
@@ -75,8 +76,8 @@ function LoginPage() {
           />
           
           {/* Success icon */}
-          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-status-success/10 flex items-center justify-center">
-            <HiOutlineCheckCircle className="w-8 h-8 text-status-success" />
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-app-green/20 flex items-center justify-center">
+            <HiOutlineCheckCircle className="w-8 h-8 text-app-green-dark" />
           </div>
           
           {/* Success message */}
@@ -96,6 +97,7 @@ function LoginPage() {
             <Button
               variant="secondary"
               size="sm"
+              className="bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
               onClick={() => requestLink(email)}
               isLoading={isLoading}
               disabled={isInCooldown}
@@ -103,6 +105,7 @@ function LoginPage() {
               {isInCooldown ? `Resend in ${cooldownSeconds}s` : 'Resend email'}
             </Button>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -113,8 +116,9 @@ function LoginPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-page bg-surface-primary">
-      <div className="w-full max-w-sm animate-fade-in">
+    <div className="min-h-screen flex flex-col bg-app-sand">
+      <div className="flex-1 flex items-center justify-center px-page">
+      <div className="w-full max-w-sm animate-fade-in bg-white rounded-3xl shadow-card border border-border-secondary p-8">
         {/* App icon */}
         <div className="text-center mb-8">
           <img
@@ -122,7 +126,7 @@ function LoginPage() {
             alt="Chatterbox"
             className="w-20 h-20 mx-auto mb-6 rounded-2xl shadow-card"
           />
-          <h1 className="text-heading-xl font-semibold text-text-primary mb-2">
+          <h1 className="text-heading-lg font-semibold text-text-primary mb-2">
             Welcome to Chatterbox
           </h1>
           <p className="text-body-md text-text-secondary">
@@ -147,7 +151,7 @@ function LoginPage() {
             type="submit"
             variant="primary"
             size="lg"
-            className="w-full"
+            className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
             isLoading={isLoading}
             disabled={!isValidEmail(email) || isInCooldown}
             rightIcon={!isLoading ? <HiOutlineArrowRight /> : undefined}
@@ -166,6 +170,7 @@ function LoginPage() {
             We'll send you a magic link to sign in
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

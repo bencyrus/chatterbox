@@ -7,6 +7,20 @@ import {
   HiOutlineDocumentChartBar,
 } from 'react-icons/hi2';
 import { ROUTES } from '../lib/constants';
+import { MarketingHeader } from '../components/layout/MarketingHeader';
+
+const headerActions = [
+  <Link
+    key="open-app"
+    to={ROUTES.APP}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="btn-base bg-app-green-strong text-white hover:bg-app-green-dark active:bg-app-green-dark shadow-button text-label-md px-5 py-2"
+  >
+    <span>Open App</span>
+    <HiOutlineArrowRight className="w-4 h-4 relative top-[1px] shrink-0" />
+  </Link>,
+];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HOME PAGE
@@ -19,29 +33,7 @@ import { ROUTES } from '../lib/constants';
 function HomePage() {
   return (
     <div className="min-h-screen bg-surface-primary">
-      <header className="sticky top-0 z-sticky bg-white border-b border-border-secondary">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src="https://storage.googleapis.com/chatterbox-public-assets/public-chatterbox-logo-color-bg.png"
-              alt="Chatterbox"
-              className="w-10 h-10 rounded-2xl shadow-card"
-            />
-            <span className="text-heading-sm font-semibold text-text-primary">
-              Chatterbox
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              to={ROUTES.APP}
-              className="btn-base bg-app-green-strong text-white hover:bg-app-green-dark active:bg-app-green-dark shadow-button text-label-md px-5 py-2"
-            >
-              <span>Open App</span>
-              <HiOutlineArrowRight className="w-4 h-4 relative top-[1px] shrink-0" />
-            </Link>
-          </div>
-        </div>
-      </header>
+      <MarketingHeader actions={headerActions} />
 
       <main className="max-w-6xl mx-auto px-6 pb-16">
         <section className="py-12 max-w-2xl">
@@ -55,6 +47,8 @@ function HomePage() {
           <div className="flex flex-wrap gap-3 mt-6">
             <Link
               to={ROUTES.APP}
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn-base bg-app-green-strong text-white hover:bg-app-green-dark active:bg-app-green-dark shadow-button text-label-lg px-8 py-4"
             >
               <span>Open App</span>

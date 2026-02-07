@@ -16,7 +16,7 @@
   
   /* Focus styles */
   :focus-visible {
-    @apply outline-none ring-2 ring-brand-500 ring-offset-2;
+    @apply outline-none ring-2 ring-app-green-strong ring-offset-[1.5px];
   }
   
   /* Remove default button styles */
@@ -64,7 +64,7 @@
     @apply w-full px-3 py-2 rounded-input border border-border 
            bg-surface text-text-primary
            placeholder:text-text-tertiary
-           focus:border-brand-500 focus:ring-1 focus:ring-brand-500
+           focus:border-app-green-strong focus:ring-1 focus:ring-app-green-strong
            disabled:opacity-50 disabled:bg-surface-secondary;
   }
   
