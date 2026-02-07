@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { recordingsApi } from '../../services/recordings';
-import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/api';
 import type { Recording, ReportStatus } from '../../types';
 import { TRANSCRIPTION_POLL_INTERVAL_MS } from '../../lib/constants';
@@ -20,8 +19,6 @@ interface UseTranscriptionReturn {
   transcription: string | null;
   /** Transcription status */
   status: ReportStatus | null;
-  /** Whether transcription is loading */
-  isLoading: boolean;
   /** Whether transcription request is pending */
   isRequesting: boolean;
   /** Error message if any */
@@ -40,11 +37,9 @@ export function useTranscription({
 }: UseTranscriptionParams): UseTranscriptionReturn {
   const [transcription, setTranscription] = useState<string | null>(null);
   const [status, setStatus] = useState<ReportStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { showToast } = useToast();
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -104,12 +99,10 @@ export function useTranscription({
       
       if (response.status === 'started' || response.status === 'in_progress') {
         setStatus('processing');
-        showToast('Transcription started. This may take a moment.', 'info');
         startPolling();
       } else if (response.status === 'already_transcribed') {
         // Refresh to get the existing transcription
         onRefresh?.();
-        showToast('Recording already has a transcription', 'info');
       }
     } catch (err) {
       const message =
@@ -117,11 +110,10 @@ export function useTranscription({
           ? err.message
           : 'Failed to request transcription.';
       setError(message);
-      showToast(message, 'error');
     } finally {
       setIsRequesting(false);
     }
-  }, [recording, showToast, startPolling, onRefresh]);
+  }, [recording, startPolling, onRefresh]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Initialize from recording
@@ -131,25 +123,34 @@ export function useTranscription({
     if (!recording) {
       setTranscription(null);
       setStatus(null);
+      stopPolling();
       return;
     }
 
     // Check if recording already has transcription data
     const report = recording.report;
-    if (report) {
-      setStatus(report.status);
-      
-      if (report.status === 'ready' && report.transcript) {
-        setTranscription(report.transcript);
-        stopPolling();
-      } else if (report.status === 'processing') {
-        // Start polling for processing transcriptions
-        startPolling();
-      } else {
-        setTranscription(null);
-      }
-    } else {
+    if (!report) {
       setStatus('none');
+      setTranscription(null);
+      stopPolling();
+      return;
+    }
+
+    setStatus(report.status);
+
+    // Only poll while the backend says we're processing.
+    if (report.status === 'processing') {
+      setTranscription(null);
+      startPolling();
+      return;
+    }
+
+    // Any non-processing status should stop polling immediately.
+    stopPolling();
+
+    if (report.status === 'ready' && report.transcript) {
+      setTranscription(report.transcript);
+    } else {
       setTranscription(null);
     }
   }, [recording?.profileCueRecordingId, recording?.report?.status, recording?.report?.transcript, startPolling, stopPolling]);
@@ -171,7 +172,6 @@ export function useTranscription({
   return {
     transcription,
     status,
-    isLoading,
     isRequesting,
     error,
     requestTranscription,

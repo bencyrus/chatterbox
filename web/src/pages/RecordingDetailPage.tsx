@@ -1,6 +1,11 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { HiOutlineDocumentText, HiOutlineChartBar, HiOutlineCalendar } from 'react-icons/hi2';
+import {
+  HiDocumentText,
+  HiOutlineDocumentText,
+  HiOutlineChartBar,
+  HiOutlineCalendar,
+} from 'react-icons/hi2';
 import { useAppHeader } from '../components/layout/AppHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -10,7 +15,6 @@ import { Modal } from '../components/ui/Modal';
 import { CueContentMarkdown } from '../components/cues/CueContentMarkdown';
 import { AudioPlayer } from '../components/recording/AudioPlayer';
 import { NewRecordingButton } from '../components/recording/NewRecordingButton';
-import { TranscriptBadge } from '../components/history/TranscriptBadge';
 import { recordingsApi } from '../services/recordings';
 import { cuesApi } from '../services/cues';
 import { useTranscription } from '../hooks/history/useTranscription';
@@ -40,7 +44,8 @@ function RecordingDetailPage() {
   const [isLoading, setIsLoading] = useState(!location.state?.recording);
   const [error, setError] = useState<string | null>(null);
   const [showTranscriptModal, setShowTranscriptModal] = useState(false);
-  const [recordingCount, setRecordingCount] = useState<number>(0);
+  // null = unknown/not yet fetched (avoid double-fetch on initial load)
+  const [recordingCount, setRecordingCount] = useState<number | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Fetch recording from history if not passed via state
@@ -68,19 +73,10 @@ function RecordingDetailPage() {
       );
 
       if (foundRecording) {
+        // Reset count so it can be fetched for this cue
+        setRecordingCount(null);
         setRecording(foundRecording);
         setProcessedFiles(response.processedFiles || []);
-        
-        // Fetch recording count for this cue
-        try {
-          const cueResponse = await cuesApi.getCueForProfile({
-            profileId: activeProfile.profileId,
-            cueId: foundRecording.cueId,
-          });
-          setRecordingCount(cueResponse.cue?.recordings?.length || 0);
-        } catch (err) {
-          console.error('Failed to fetch recording count:', err);
-        }
       } else {
         setError('Recording not found');
       }
@@ -111,17 +107,6 @@ function RecordingDetailPage() {
       if (foundRecording) {
         setRecording(foundRecording);
         setProcessedFiles(response.processedFiles || []);
-        
-        // Also update recording count
-        try {
-          const cueResponse = await cuesApi.getCueForProfile({
-            profileId: activeProfile.profileId,
-            cueId: foundRecording.cueId,
-          });
-          setRecordingCount(cueResponse.cue?.recordings?.length || 0);
-        } catch (err) {
-          console.error('Failed to fetch recording count:', err);
-        }
       }
     } catch (err) {
       console.error('Failed to refresh recording:', err);
@@ -131,8 +116,8 @@ function RecordingDetailPage() {
   useEffect(() => {
     if (!recording && activeProfile) {
       fetchRecording();
-    } else if (recording && activeProfile && recordingCount === 0) {
-      // Fetch recording count if we have a recording but no count yet
+    } else if (recording && activeProfile && recordingCount === null) {
+      // Fetch recording count if we have a recording but count not yet fetched
       const fetchCount = async () => {
         try {
           const cueResponse = await cuesApi.getCueForProfile({
@@ -142,6 +127,7 @@ function RecordingDetailPage() {
           setRecordingCount(cueResponse.cue?.recordings?.length || 0);
         } catch (err) {
           console.error('Failed to fetch recording count:', err);
+          setRecordingCount(0);
         }
       };
       fetchCount();
@@ -153,6 +139,7 @@ function RecordingDetailPage() {
     transcription,
     status: transcriptionStatus,
     isRequesting: isRequestingTranscription,
+    error: transcriptionError,
     requestTranscription,
   } = useTranscription({ 
     recording, 
@@ -177,7 +164,7 @@ function RecordingDetailPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const recordingCountDisplay = useMemo(() => {
-    if (!recording || recordingCount === 0) return null;
+    if (!recording || !recordingCount) return null;
     
     return (
       <button
@@ -310,7 +297,13 @@ function RecordingDetailPage() {
               size="lg"
               onClick={() => setShowTranscriptModal(true)}
               className="!w-full !bg-app-green-strong !text-white hover:!bg-app-green-deep"
-              leftIcon={<HiOutlineDocumentText className="w-5 h-5" />}
+              leftIcon={
+                transcriptionStatus === 'ready' ? (
+                  <HiDocumentText className="w-5 h-5" />
+                ) : (
+                  <HiOutlineDocumentText className="w-5 h-5" />
+                )
+              }
             >
               View Report
             </Button>
@@ -326,13 +319,6 @@ function RecordingDetailPage() {
         title={recording.cue?.content?.title || 'Recording Report'}
       >
         <div className="space-y-4">
-          {/* Status badge */}
-          {transcriptionStatus && transcriptionStatus !== 'none' && (
-            <div className="flex justify-end">
-              <TranscriptBadge status={transcriptionStatus} />
-            </div>
-          )}
-
           {/* Transcript content */}
           {transcription ? (
             <div className="py-2">
@@ -358,6 +344,11 @@ function RecordingDetailPage() {
               <p className="text-body-md text-text-secondary mb-6">
                 No transcript available yet. Generate an AI-powered transcription of your recording.
               </p>
+              {transcriptionError && (
+                <p className="text-body-sm text-red-700 mb-4">
+                  {transcriptionError}
+                </p>
+              )}
               <Button
                 variant="primary"
                 size="lg"

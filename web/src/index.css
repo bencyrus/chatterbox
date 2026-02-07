@@ -89,7 +89,8 @@
   
   /* Safe area padding for mobile */
   .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    /* Add a little extra breathing room above bottom */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
   }
   
   .safe-top {
