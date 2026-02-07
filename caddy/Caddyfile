@@ -112,7 +112,14 @@ EOF
 EOF
     }
 
-    # Serve the marketing website
+    # API requests go to gateway (PostgREST)
+    handle_path /api/* {
+        reverse_proxy gateway:8080 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Serve the marketing website (fallback for all other routes)
     reverse_proxy web:5173 {
         header_up X-Request-ID {http.request.uuid}
     }
