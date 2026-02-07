@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { recordingsApi } from '../../services/recordings';
 import { uploadToSignedUrl } from '../../services/api';
 import { useProfile } from '../../contexts/ProfileContext';
@@ -37,6 +37,7 @@ export function useRecordingUpload({
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef<Promise<Recording | null> | null>(null);
   
   const { activeProfile } = useProfile();
   const { showToast } = useToast();
@@ -47,64 +48,75 @@ export function useRecordingUpload({
 
   const upload = useCallback(
     async (blob: Blob, durationMs: number): Promise<Recording | null> => {
+      // Hard guard: prevent concurrent uploads from double-clicks / effect re-entry
+      if (inFlightRef.current) {
+        return inFlightRef.current;
+      }
+
       if (!activeProfile) {
         showToast('No active profile', 'error');
         return null;
       }
 
-      setIsUploading(true);
-      setProgress(0);
-      setError(null);
+      const run = (async () => {
+        setIsUploading(true);
+        setProgress(0);
+        setError(null);
 
-      try {
-        // Step 1: Create upload intent
-        setProgress(10);
-        const intent = await recordingsApi.createUploadIntent({
-          profileId: activeProfile.profileId,
-          cueId,
-          mimeType: AUDIO_UPLOAD_MIME_TYPE,
-        });
+        try {
+          // Step 1: Create upload intent
+          setProgress(10);
+          const intent = await recordingsApi.createUploadIntent({
+            profileId: activeProfile.profileId,
+            cueId,
+            mimeType: AUDIO_UPLOAD_MIME_TYPE,
+          });
 
-        // Step 2: Upload to signed URL
-        setProgress(30);
-        await uploadToSignedUrl(intent.uploadUrl, blob, AUDIO_UPLOAD_MIME_TYPE);
+          // Step 2: Upload to signed URL
+          setProgress(30);
+          await uploadToSignedUrl(intent.uploadUrl, blob, AUDIO_UPLOAD_MIME_TYPE);
 
-        // Step 3: Complete upload with metadata
-        setProgress(80);
-        const response = await recordingsApi.completeUpload({
-          uploadIntentId: intent.uploadIntentId,
-          metadata: {
-            duration: formatDurationMs(durationMs),
-          },
-        });
+          // Step 3: Complete upload with metadata
+          setProgress(80);
+          const response = await recordingsApi.completeUpload({
+            uploadIntentId: intent.uploadIntentId,
+            metadata: {
+              duration: formatDurationMs(durationMs),
+            },
+          });
 
-        setProgress(100);
-        showToast('Recording saved!', 'success');
-        
-        // Return a Recording object constructed from the response
-        // The complete_recording_upload returns file info, not full recording
-        // Return a partial recording that the caller can use
-        return {
-          profileCueRecordingId: 0, // Will be refreshed on next load
-          profileId: activeProfile.profileId,
-          cueId,
-          fileId: response.file.fileId,
-          createdAt: new Date().toISOString(),
-          file: response.file,
-          cue: null as any, // Not returned from complete, caller should refresh
-          report: { status: 'none', transcript: null },
-        };
-      } catch (err) {
-        const message =
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to upload recording. Please try again.';
-        setError(message);
-        showToast(message, 'error');
-        return null;
-      } finally {
-        setIsUploading(false);
-      }
+          setProgress(100);
+          showToast('Recording saved!', 'success');
+          
+          // Return a Recording object constructed from the response
+          // The complete_recording_upload returns file info, not full recording
+          // Return a partial recording that the caller can use
+          return {
+            profileCueRecordingId: 0, // Will be refreshed on next load
+            profileId: activeProfile.profileId,
+            cueId,
+            fileId: response.file.fileId,
+            createdAt: new Date().toISOString(),
+            file: response.file,
+            cue: null as any, // Not returned from complete, caller should refresh
+            report: { status: 'none' as const, transcript: null },
+          };
+        } catch (err) {
+          const message =
+            err instanceof ApiError
+              ? err.message
+              : 'Failed to upload recording. Please try again.';
+          setError(message);
+          showToast(message, 'error');
+          return null;
+        } finally {
+          setIsUploading(false);
+          inFlightRef.current = null;
+        }
+      })();
+
+      inFlightRef.current = run;
+      return run;
     },
     [activeProfile, cueId, showToast]
   );

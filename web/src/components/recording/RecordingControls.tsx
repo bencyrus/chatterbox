@@ -85,6 +85,10 @@ export function RecordingControls({
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
+    if (isUploading || shouldSaveAfterStop) {
+      return;
+    }
+
     // If paused, stop the recording first to generate the blob
     if (state === 'paused') {
       setShouldSaveAfterStop(true);
@@ -108,13 +112,15 @@ export function RecordingControls({
 
   useEffect(() => {
     if (shouldSaveAfterStop && state === 'stopped' && audioBlob && !isUploading) {
+      // One-shot guard: flip early so a re-render/effect re-run can't double-fire
+      setShouldSaveAfterStop(false);
+
       // Upload directly here to avoid infinite loop from handleSave recreation
       const performUpload = async () => {
         const recording = await upload(audioBlob, durationMs);
         if (recording) {
           onRecordingSaved?.(recording);
           reset();
-          setShouldSaveAfterStop(false);
         }
       };
       performUpload();
@@ -221,7 +227,11 @@ export function RecordingControls({
           <button
             type="button"
             onClick={handleSave}
-            className="w-[100px] h-[70px] flex flex-col items-center justify-center gap-1.5 rounded-3xl border-2 border-success-600 transition-colors hover:bg-app-green/20"
+            disabled={isUploading || shouldSaveAfterStop}
+            className={cn(
+              'w-[100px] h-[70px] flex flex-col items-center justify-center gap-1.5 rounded-3xl border-2 border-success-600 transition-colors hover:bg-app-green/20',
+              (isUploading || shouldSaveAfterStop) && 'opacity-60 cursor-not-allowed'
+            )}
           >
             <HiArchiveBox className="w-6 h-6 text-success-600" />
             <span className="text-label-sm text-success-600">Save</span>
