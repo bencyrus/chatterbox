@@ -42,7 +42,7 @@ export function useAudioPlayer({
   url,
   onEnded,
 }: UseAudioPlayerParams): UseAudioPlayerReturn {
-  const { currentPlayingId, setPlaying, audioRef } = useAudio();
+  const { currentPlayingId, setPlaying } = useAudio();
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -105,17 +105,16 @@ export function useAudioPlayer({
   }, [isPlaying, play, pause]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Seek
+  // Seek (accepts time in seconds)
   // ─────────────────────────────────────────────────────────────────────────
 
-  const seek = useCallback((position: number) => {
+  const seek = useCallback((timeInSeconds: number) => {
     const audio = getAudio();
     if (!audio || !audio.duration) return;
 
-    const time = position * audio.duration;
-    audio.currentTime = time;
-    setCurrentTime(time);
-    setProgress(position);
+    audio.currentTime = timeInSeconds;
+    setCurrentTime(timeInSeconds);
+    setProgress(timeInSeconds / audio.duration);
   }, [getAudio]);
 
   // ─────────────────────────────────────────────────────────────────────────

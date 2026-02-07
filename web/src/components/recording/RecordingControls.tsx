@@ -108,9 +108,18 @@ export function RecordingControls({
 
   useEffect(() => {
     if (shouldSaveAfterStop && state === 'stopped' && audioBlob && !isUploading) {
-      handleSave();
+      // Upload directly here to avoid infinite loop from handleSave recreation
+      const performUpload = async () => {
+        const recording = await upload(audioBlob, durationMs);
+        if (recording) {
+          onRecordingSaved?.(recording);
+          reset();
+          setShouldSaveAfterStop(false);
+        }
+      };
+      performUpload();
     }
-  }, [shouldSaveAfterStop, state, audioBlob, isUploading, handleSave]);
+  }, [shouldSaveAfterStop, state, audioBlob, isUploading, upload, durationMs, onRecordingSaved, reset]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handle discard

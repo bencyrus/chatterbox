@@ -110,6 +110,10 @@ export function formatDateTime(date: Date | string): string {
  * Example: 90 -> "1:30"
  */
 export function formatDuration(seconds: number): string {
+  // Guard against invalid values
+  if (!isFinite(seconds) || seconds < 0 || isNaN(seconds)) {
+    return '0:00';
+  }
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;

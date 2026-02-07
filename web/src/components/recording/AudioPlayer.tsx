@@ -1,4 +1,5 @@
 import { HiPlay, HiPause } from 'react-icons/hi2';
+import { PiArrowArcLeft, PiArrowArcRight } from 'react-icons/pi';
 import { AudioProgress } from '../ui/Progress';
 import { cn } from '../../lib/cn';
 import { formatDurationMs } from '../../lib/date';
@@ -34,57 +35,97 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
   const {
     isPlaying,
-    progress,
     currentTime,
     duration,
     toggle,
     seek,
   } = useAudioPlayer({ id, url });
 
-  // Use provided duration or calculated duration
-  const displayDuration = duration > 0 ? duration * 1000 : (durationMs || 0);
-  const displayCurrentTime = currentTime * 1000;
+  // Use provided duration or calculated duration (guard against invalid values)
+  const displayDuration = (isFinite(duration) && duration > 0) ? duration * 1000 : (durationMs || 0);
+  const displayCurrentTime = isFinite(currentTime) ? currentTime * 1000 : 0;
 
   return (
-    <div className={cn('flex items-center gap-3', className)}>
-      {/* Play/Pause button */}
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={!url}
-        className={cn(
-          'w-10 h-10 flex-shrink-0 rounded-full',
-          'flex items-center justify-center',
-          'bg-app-green-strong text-white',
-          'hover:bg-app-green-dark',
-          'transition-colors duration-150',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
-          'focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green-strong focus-visible:ring-offset-2'
-        )}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
-      >
-        {isPlaying ? (
-          <HiPause className="w-5 h-5" />
-        ) : (
-          <HiPlay className="w-5 h-5 ml-0.5" />
-        )}
-      </button>
-
-      {/* Progress bar */}
-      <div className="flex-1 min-w-0">
+    <div className={cn('space-y-3', className)}>
+      {/* Progress slider */}
+      <div className="px-1">
         <AudioProgress
-          progress={progress}
+          currentTime={currentTime}
+          duration={duration}
           onSeek={seek}
-          disabled={!url}
         />
       </div>
 
-      {/* Duration */}
+      {/* Time display */}
       {showDuration && displayDuration > 0 && (
-        <span className="text-body-sm text-text-tertiary font-mono flex-shrink-0 w-20 text-right">
-          {formatDurationMs(displayCurrentTime)} / {formatDurationMs(displayDuration)}
-        </span>
+        <div className="flex justify-between text-caption text-text-tertiary px-1">
+          <span>{formatDurationMs(displayCurrentTime)}</span>
+          <span>{formatDurationMs(displayDuration)}</span>
+        </div>
       )}
+
+      {/* Playback controls */}
+      <div className="flex items-center justify-center gap-6">
+        {/* Skip backward 10s */}
+        <button
+          type="button"
+          onClick={() => seek(Math.max(0, currentTime - 10))}
+          disabled={!url}
+          className={cn(
+            'w-9 h-9 flex-shrink-0 rounded-full',
+            'flex items-center justify-center',
+            'bg-black/10 text-text-primary',
+            'hover:bg-black/15',
+            'transition-all duration-150',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            'active:scale-95'
+          )}
+          aria-label="Skip backward 10 seconds"
+        >
+          <PiArrowArcLeft className="w-5 h-5" />
+        </button>
+
+        {/* Play/Pause */}
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={!url}
+          className={cn(
+            'w-11 h-11 flex-shrink-0 rounded-full',
+            'flex items-center justify-center',
+            'bg-transparent text-text-primary',
+            'transition-transform duration-150',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            'active:scale-95'
+          )}
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? (
+            <HiPause className="w-11 h-11" />
+          ) : (
+            <HiPlay className="w-11 h-11" />
+          )}
+        </button>
+
+        {/* Skip forward 10s */}
+        <button
+          type="button"
+          onClick={() => seek(Math.min(duration, currentTime + 10))}
+          disabled={!url}
+          className={cn(
+            'w-9 h-9 flex-shrink-0 rounded-full',
+            'flex items-center justify-center',
+            'bg-black/10 text-text-primary',
+            'hover:bg-black/15',
+            'transition-all duration-150',
+            'disabled:opacity-50 disabled:cursor-not-allowed',
+            'active:scale-95'
+          )}
+          aria-label="Skip forward 10 seconds"
+        >
+          <PiArrowArcRight className="w-5 h-5" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -33,8 +33,7 @@ function CueDetailPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleRecordingSaved = useCallback((recording: Recording) => {
-    // Optionally navigate to recording detail or stay on page
-    // For now, just stay and allow more recordings
+    // Just log for now, stays on same page for another recording
     console.log('Recording saved:', recording.profileCueRecordingId);
   }, []);
 
