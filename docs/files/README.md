@@ -92,6 +92,34 @@ Last verified: 2025-12-07
   - `FILE_SERVICE_API_KEY` is a shared secret between gateway and files.
   - Gateway sends this value as `X-File-Service-Api-Key` on all `/signed_download_url` and `/signed_upload_url` calls.
 
+### Browser uploads and CORS (important)
+
+When the web app uploads directly to GCS using a V4 signed `PUT` URL (e.g. `https://storage.googleapis.com/<bucket>/<object>?X-Goog-...`), the browser will send a CORS **preflight** request.
+
+If the bucket does not have a CORS policy that allows your site origin, uploads will fail with an error like:
+
+- `No 'Access-Control-Allow-Origin' header is present on the requested resource.`
+
+To fix this, apply a bucket CORS policy. A working example is checked in at:
+
+- `docs/files/gcs-cors.json`
+
+Apply it (pick one):
+
+- `gsutil`:
+
+  ```bash
+  gsutil cors set docs/files/gcs-cors.json gs://chatterbox-bucket-main
+  ```
+
+- `gcloud storage`:
+
+  ```bash
+  gcloud storage buckets update gs://chatterbox-bucket-main --cors-file=docs/files/gcs-cors.json
+  ```
+
+If you serve the app from additional origins (e.g. `https://www.chatterboxtalk.com`, staging domains, localhost), add them to the `origin` list in `gcs-cors.json`.
+
 Example configuration template: [`secrets/.env.files.example`](../../secrets/.env.files.example)
 
 ### Examples

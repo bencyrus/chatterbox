@@ -1,0 +1,9 @@
+[
+  {
+    "origin": ["https://chatterboxtalk.com"],
+    "method": ["GET", "HEAD", "PUT", "OPTIONS"],
+    "responseHeader": ["Content-Type", "ETag", "x-goog-resumable", "x-goog-request-id"],
+    "maxAgeSeconds": 3600
+  }
+]
+
