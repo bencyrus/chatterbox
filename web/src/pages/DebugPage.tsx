@@ -14,6 +14,7 @@ function DebugPage() {
   const { isAuthenticated, account } = useAuth();
   const [tokens, setTokensState] = useState(getTokens());
   const [localStorageKeys, setLocalStorageKeys] = useState<string[]>([]);
+  const [cookies, setCookies] = useState<Array<{name: string, value: string}>>([]);
 
   useEffect(() => {
     // Get all localStorage keys
@@ -23,6 +24,22 @@ function DebugPage() {
       if (key) keys.push(key);
     }
     setLocalStorageKeys(keys);
+    
+    // Get all cookies
+    const cookieList: Array<{name: string, value: string}> = [];
+    if (document.cookie) {
+      const cookieStrings = document.cookie.split(';');
+      for (const cookie of cookieStrings) {
+        const [name, ...valueParts] = cookie.split('=');
+        if (name) {
+          cookieList.push({
+            name: decodeURIComponent(name.trim()),
+            value: decodeURIComponent(valueParts.join('=').trim())
+          });
+        }
+      }
+    }
+    setCookies(cookieList);
   }, []);
 
   const handleRefresh = () => {
@@ -34,6 +51,21 @@ function DebugPage() {
       if (key) keys.push(key);
     }
     setLocalStorageKeys(keys);
+    
+    const cookieList: Array<{name: string, value: string}> = [];
+    if (document.cookie) {
+      const cookieStrings = document.cookie.split(';');
+      for (const cookie of cookieStrings) {
+        const [name, ...valueParts] = cookie.split('=');
+        if (name) {
+          cookieList.push({
+            name: decodeURIComponent(name.trim()),
+            value: decodeURIComponent(valueParts.join('=').trim())
+          });
+        }
+      }
+    }
+    setCookies(cookieList);
   };
 
   const handleClearTokens = () => {
@@ -145,10 +177,32 @@ function DebugPage() {
           </div>
         </div>
 
+        {/* Cookies (Shared Storage) */}
+        <div className="bg-white rounded-3xl shadow-card border border-border-secondary p-6 mb-4">
+          <h2 className="text-heading-lg font-semibold text-text-primary mb-4">
+            🍪 Cookies (Shared between Safari & PWA!)
+          </h2>
+          {cookies.length === 0 ? (
+            <p className="text-body-md text-text-secondary">No cookies found</p>
+          ) : (
+            <div className="space-y-2">
+              {cookies.map((cookie, idx) => (
+                <div key={idx} className="flex flex-col border-b border-border-secondary pb-2">
+                  <span className="font-semibold text-sm">{cookie.name}</span>
+                  <span className="text-xs text-text-secondary font-mono break-all">
+                    {cookie.value.substring(0, 100)}
+                    {cookie.value.length > 100 ? '...' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* LocalStorage Contents */}
         <div className="bg-white rounded-3xl shadow-card border border-border-secondary p-6 mb-4">
           <h2 className="text-heading-lg font-semibold text-text-primary mb-4">
-            localStorage Contents
+            localStorage (NOT shared on iOS PWA)
           </h2>
           {localStorageKeys.length === 0 ? (
             <p className="text-body-md text-text-secondary">No items in localStorage</p>
