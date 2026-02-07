@@ -154,13 +154,6 @@ function MagicLinkPage() {
     navigate(ROUTES.APP);
   }, [navigate]);
 
-  const handleOpenPWA = useCallback(() => {
-    // Get the base URL without the /auth/magic path
-    const baseUrl = window.location.origin;
-    // Try to open the PWA - this works if user has added to home screen
-    window.location.href = baseUrl + ROUTES.APP;
-  }, []);
-
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
@@ -214,39 +207,44 @@ function MagicLinkPage() {
             <h1 className="text-heading-lg font-semibold text-text-primary mb-2">
               You're signed in!
             </h1>
-            <p className="text-body-md text-text-secondary mb-6">
-              To continue, open the Chatterbox app from your home screen.
+            <p className="text-body-md text-text-secondary mb-2">
+              Your login is ready.
             </p>
             
-            {/* Action buttons */}
-            <div className="space-y-3">
-              <Button
-                variant="primary"
-                onClick={handleOpenPWA}
-                className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
-                leftIcon={<HiOutlineDevicePhoneMobile />}
-              >
-                Open Chatterbox App
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleContinueInBrowser}
-                className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
-              >
-                Continue in browser
-              </Button>
+            {/* Main instruction - emphasized */}
+            <div className="my-6 p-5 bg-success-50 border-2 border-success-600 rounded-2xl">
+              <div className="flex items-start gap-3 mb-3">
+                <HiOutlineDevicePhoneMobile className="w-6 h-6 text-success-600 flex-shrink-0 mt-0.5" />
+                <div className="text-left">
+                  <p className="text-body-md font-semibold text-text-primary mb-1">
+                    Next Step:
+                  </p>
+                  <p className="text-body-md text-text-secondary">
+                    Close this browser and tap the <strong className="text-text-primary">Chatterbox icon</strong> on your home screen to start using the app.
+                  </p>
+                </div>
+              </div>
             </div>
             
-            {/* Instructions */}
-            <div className="mt-6 p-4 bg-app-sand-light rounded-2xl text-left">
-              <p className="text-body-sm text-text-secondary mb-2">
-                <strong className="text-text-primary">If you haven't added Chatterbox to your home screen yet:</strong>
+            {/* Fallback option */}
+            <Button
+              variant="secondary"
+              onClick={handleContinueInBrowser}
+              className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark mb-6"
+            >
+              Continue in browser instead
+            </Button>
+            
+            {/* First-time setup instructions */}
+            <div className="p-4 bg-app-sand-light rounded-2xl text-left border border-border-secondary">
+              <p className="text-body-sm text-text-secondary mb-3">
+                <strong className="text-text-primary">Don't see Chatterbox on your home screen?</strong>
               </p>
-              <ol className="text-body-sm text-text-secondary space-y-1 list-decimal list-inside">
-                <li>Tap the Share button in Safari</li>
-                <li>Select "Add to Home Screen"</li>
-                <li>Tap "Add"</li>
-                <li>Open Chatterbox from your home screen</li>
+              <ol className="text-body-sm text-text-secondary space-y-2 list-decimal list-inside pl-1">
+                <li>Tap the <strong>Share button</strong> <span className="inline-block">⎙</span> in Safari</li>
+                <li>Scroll and select <strong>"Add to Home Screen"</strong></li>
+                <li>Tap <strong>"Add"</strong></li>
+                <li>Open <strong>Chatterbox</strong> from your home screen</li>
               </ol>
             </div>
           </>
