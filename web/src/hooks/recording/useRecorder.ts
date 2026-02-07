@@ -36,11 +36,12 @@ interface UseRecorderReturn {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function getSupportedMimeType(): string {
-  if (MediaRecorder.isTypeSupported(AUDIO_MIME_TYPE)) {
-    return AUDIO_MIME_TYPE;
-  }
+  // Prefer MP4 when available since it is playable on iOS and aligns with backend support.
   if (MediaRecorder.isTypeSupported(AUDIO_MIME_TYPE_FALLBACK)) {
     return AUDIO_MIME_TYPE_FALLBACK;
+  }
+  if (MediaRecorder.isTypeSupported(AUDIO_MIME_TYPE)) {
+    return AUDIO_MIME_TYPE;
   }
   // Fallback to default
   return '';

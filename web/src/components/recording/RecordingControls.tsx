@@ -56,6 +56,23 @@ export function RecordingControls({
 
   const { showToast } = useToast();
 
+  const isUploadableRecording = useCallback(
+    (blob: Blob): boolean => {
+      // Backend currently only accepts audio/mp4 and generates .m4a object keys.
+      // Many browsers (notably Chrome) record audio as WebM/Opus via MediaRecorder,
+      // which iOS cannot decode. Prevent uploading mismatched bytes-as-mp4.
+      if (!blob.type || !blob.type.startsWith('audio/mp4')) {
+        showToast(
+          'This browser recorded audio in a format that isn’t supported for saving yet. Please use Safari or the iOS app.',
+          'error'
+        );
+        return false;
+      }
+      return true;
+    },
+    [showToast]
+  );
+
   // ─────────────────────────────────────────────────────────────────────────
   // Show recorder error
   // ─────────────────────────────────────────────────────────────────────────
@@ -97,6 +114,7 @@ export function RecordingControls({
     }
 
     if (!audioBlob) return;
+    if (!isUploadableRecording(audioBlob)) return;
 
     const recording = await upload(audioBlob, durationMs);
     if (recording) {
@@ -115,6 +133,10 @@ export function RecordingControls({
       // One-shot guard: flip early so a re-render/effect re-run can't double-fire
       setShouldSaveAfterStop(false);
 
+      if (!isUploadableRecording(audioBlob)) {
+        return;
+      }
+
       // Upload directly here to avoid infinite loop from handleSave recreation
       const performUpload = async () => {
         const recording = await upload(audioBlob, durationMs);
@@ -125,7 +147,17 @@ export function RecordingControls({
       };
       performUpload();
     }
-  }, [shouldSaveAfterStop, state, audioBlob, isUploading, upload, durationMs, onRecordingSaved, reset]);
+  }, [
+    shouldSaveAfterStop,
+    state,
+    audioBlob,
+    isUploading,
+    isUploadableRecording,
+    upload,
+    durationMs,
+    onRecordingSaved,
+    reset,
+  ]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handle discard
