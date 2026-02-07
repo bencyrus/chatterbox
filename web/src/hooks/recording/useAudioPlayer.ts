@@ -51,15 +51,26 @@ export function useAudioPlayer({
   const localAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Get or create audio element
+  // Initialize audio element when URL is available
   // ─────────────────────────────────────────────────────────────────────────
 
-  const getAudio = useCallback((): HTMLAudioElement | null => {
-    // Use local audio element for better control
-    if (!localAudioRef.current && url) {
-      localAudioRef.current = new Audio(url);
+  useEffect(() => {
+    if (!url) return;
+
+    // Create audio element if it doesn't exist
+    if (!localAudioRef.current) {
+      const audio = new Audio(url);
+      audio.preload = 'metadata';
+      localAudioRef.current = audio;
+    } else if (localAudioRef.current.src !== url) {
+      // Update src if URL changed
+      const wasPlaying = !localAudioRef.current.paused;
+      localAudioRef.current.src = url;
+      localAudioRef.current.preload = 'metadata';
+      if (wasPlaying) {
+        localAudioRef.current.play().catch(console.error);
+      }
     }
-    return localAudioRef.current;
   }, [url]);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -67,30 +78,24 @@ export function useAudioPlayer({
   // ─────────────────────────────────────────────────────────────────────────
 
   const play = useCallback(() => {
-    const audio = getAudio();
+    const audio = localAudioRef.current;
     if (!audio || !url) return;
 
-    // Set the URL if needed
-    if (audio.src !== url) {
-      audio.src = url;
-    }
-
-    // Play
     audio.play().catch(console.error);
     setPlaying(id);
-  }, [id, url, setPlaying, getAudio]);
+  }, [id, url, setPlaying]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Pause
   // ─────────────────────────────────────────────────────────────────────────
 
   const pause = useCallback(() => {
-    const audio = getAudio();
+    const audio = localAudioRef.current;
     if (audio) {
       audio.pause();
     }
     setPlaying(null);
-  }, [setPlaying, getAudio]);
+  }, [setPlaying]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Toggle
@@ -109,31 +114,38 @@ export function useAudioPlayer({
   // ─────────────────────────────────────────────────────────────────────────
 
   const seek = useCallback((timeInSeconds: number) => {
-    const audio = getAudio();
-    if (!audio || !audio.duration) return;
+    const audio = localAudioRef.current;
+    if (!audio || !isFinite(audio.duration) || audio.duration <= 0) return;
+    if (!isFinite(timeInSeconds)) return;
 
     audio.currentTime = timeInSeconds;
     setCurrentTime(timeInSeconds);
     setProgress(timeInSeconds / audio.duration);
-  }, [getAudio]);
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Setup audio events
   // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    const audio = getAudio();
+    const audio = localAudioRef.current;
     if (!audio) return;
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
-      if (audio.duration) {
+      
+      // Update duration if it's valid (not Infinity or 0)
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
         setProgress(audio.currentTime / audio.duration);
       }
     };
 
     const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
+      // Only set duration if it's a valid finite number
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+      }
     };
 
     const handleEnded = () => {
@@ -152,7 +164,7 @@ export function useAudioPlayer({
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [getAudio, setPlaying, onEnded]);
+  }, [url, setPlaying, onEnded]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Pause when another audio starts

@@ -16,6 +16,7 @@ interface AppHeaderConfig {
   title: string;
   subtitle?: string;
   showBack?: boolean;
+  backText?: string;
   onBack?: () => void;
   rightAction?: React.ReactNode;
 }
@@ -38,6 +39,7 @@ function areConfigsEqual(a: AppHeaderConfig, b: AppHeaderConfig) {
     a.title === b.title &&
     a.subtitle === b.subtitle &&
     a.showBack === b.showBack &&
+    a.backText === b.backText &&
     a.onBack === b.onBack &&
     a.rightAction === b.rightAction
   );
@@ -71,7 +73,7 @@ export function useAppHeader(config: AppHeaderConfig) {
     if (context) {
       context.setConfig(config);
     }
-  }, [context, config.title, config.subtitle, config.showBack, config.onBack, config.rightAction]);
+  }, [context, config.title, config.subtitle, config.showBack, config.backText, config.onBack, config.rightAction]);
 }
 
 export function AppHeader() {
@@ -82,8 +84,8 @@ export function AppHeader() {
 
   const { config } = context;
   
-  // Don't render if no title and no back button
-  if (!config.title && !config.showBack) {
+  // Don't render if no title and no right action
+  if (!config.title && !config.rightAction) {
     return null;
   }
 
@@ -92,6 +94,7 @@ export function AppHeader() {
       title={config.title}
       subtitle={config.subtitle}
       showBack={config.showBack}
+      backText={config.backText}
       onBack={config.onBack}
       rightAction={config.rightAction}
     />

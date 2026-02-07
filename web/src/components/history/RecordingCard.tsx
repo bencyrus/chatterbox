@@ -1,41 +1,10 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HiOutlineCalendar, HiOutlineClock } from 'react-icons/hi2';
+import { HiOutlineClock } from 'react-icons/hi2';
 import { cn } from '../../lib/cn';
 import { formatDurationMs, parseDuration } from '../../lib/date';
 import { ROUTES } from '../../lib/constants';
 import type { Recording } from '../../types';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function formatCardDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-
-  const isToday =
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear();
-
-  if (isToday) return 'Today';
-
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday =
-    date.getDate() === yesterday.getDate() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getFullYear() === yesterday.getFullYear();
-
-  if (isYesterday) return 'Yesterday';
-
-  return date.toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -66,8 +35,14 @@ export function RecordingCard({ recording, className }: RecordingCardProps) {
   const durationStr = recording.file?.metadata?.duration;
   const durationMs = durationStr ? parseDuration(durationStr) : 0;
 
-  // Format date
-  const dateLabel = recording.createdAt ? formatCardDate(recording.createdAt) : '';
+  // Format time
+  const timeStr = recording.createdAt
+    ? new Date(recording.createdAt).toLocaleString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '';
 
   return (
     <button
@@ -85,15 +60,12 @@ export function RecordingCard({ recording, className }: RecordingCardProps) {
         {cueText}
       </p>
 
-      {/* Metadata row: date badge + duration badge */}
+      {/* Metadata row: time badge + duration badge */}
       <div className="flex items-center justify-between mt-3">
-        {/* Date badge */}
-        {dateLabel && (
-          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/10 text-label-sm text-text-primary/80">
-            <HiOutlineCalendar className="w-3.5 h-3.5" />
-            {dateLabel}
-          </span>
-        )}
+        {/* Time badge */}
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/10 text-label-sm text-text-primary/80">
+          {timeStr}
+        </span>
 
         {/* Duration badge */}
         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/10 text-label-sm text-text-primary/80">

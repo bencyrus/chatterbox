@@ -14,6 +14,8 @@ interface PageHeaderProps {
   subtitle?: string;
   /** Show back button */
   showBack?: boolean;
+  /** Custom back button text (defaults to "Back") */
+  backText?: string;
   /** Custom back handler (defaults to navigate -1) */
   onBack?: () => void;
   /** Right side action element */
@@ -32,6 +34,7 @@ export function PageHeader({
   title,
   subtitle,
   showBack = false,
+  backText = 'Back',
   onBack,
   rightAction,
   sticky = true,
@@ -69,18 +72,17 @@ export function PageHeader({
               type="button"
               onClick={handleBack}
               className={cn(
-                'flex items-center gap-1.5 py-2.5 pl-2 pr-3 -ml-2',
-                'rounded-full min-h-[44px]',
-                'bg-white text-text-primary font-medium',
+                'inline-flex items-center gap-2 px-3 py-2.5',
+                'rounded-lg',
+                'bg-black/5 text-text-primary',
                 'hover:bg-black/10',
-                'active:bg-black/10',
-                'transition-colors duration-150',
-                'shadow-sm'
+                'transition-all',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green-strong focus-visible:ring-offset-1'
               )}
               aria-label="Go back"
             >
-              <HiOutlineChevronLeft className="w-5 h-5 shrink-0" />
-              <span className="text-body-md">Back</span>
+              <HiOutlineChevronLeft className="w-4 h-4 shrink-0" />
+              <span className="text-label-md font-medium">{backText}</span>
             </button>
           )}
         </div>

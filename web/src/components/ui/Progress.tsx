@@ -62,13 +62,17 @@ export function AudioProgress({
   onSeek,
   className,
 }: AudioProgressProps) {
-  const percentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Handle case where duration might be Infinity or invalid
+  const validDuration = isFinite(duration) && duration > 0 ? duration : 0;
+  const percentage = validDuration > 0 ? (currentTime / validDuration) * 100 : 0;
   
   const handleSeekToPosition = (clientX: number, element: HTMLElement) => {
+    if (validDuration <= 0) return; // Don't seek if duration is invalid
+    
     const rect = element.getBoundingClientRect();
     const x = clientX - rect.left;
     const newPercentage = Math.max(0, Math.min(1, x / rect.width));
-    const newTime = newPercentage * duration;
+    const newTime = newPercentage * validDuration;
     onSeek(newTime);
   };
 
@@ -107,15 +111,17 @@ export function AudioProgress({
       role="slider"
       aria-valuenow={currentTime}
       aria-valuemin={0}
-      aria-valuemax={duration}
+      aria-valuemax={validDuration}
       aria-label="Audio progress"
       tabIndex={0}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onKeyDown={(e) => {
+        if (validDuration <= 0) return;
+        
         if (e.key === 'ArrowRight') {
-          onSeek(Math.min(duration, currentTime + 5));
+          onSeek(Math.min(validDuration, currentTime + 5));
         } else if (e.key === 'ArrowLeft') {
           onSeek(Math.max(0, currentTime - 5));
         }

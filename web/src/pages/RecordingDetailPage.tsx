@@ -1,6 +1,6 @@
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
-import { HiOutlineDocumentText, HiOutlineMicrophone, HiOutlineCalendar } from 'react-icons/hi2';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { HiOutlineDocumentText, HiOutlineChartBar, HiOutlineCalendar } from 'react-icons/hi2';
 import { useAppHeader } from '../components/layout/AppHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -9,16 +9,16 @@ import { ErrorState } from '../components/feedback/ErrorState';
 import { Modal } from '../components/ui/Modal';
 import { CueContentMarkdown } from '../components/cues/CueContentMarkdown';
 import { AudioPlayer } from '../components/recording/AudioPlayer';
-import { RecordingControls } from '../components/recording/RecordingControls';
+import { NewRecordingButton } from '../components/recording/NewRecordingButton';
 import { TranscriptBadge } from '../components/history/TranscriptBadge';
 import { recordingsApi } from '../services/recordings';
 import { cuesApi } from '../services/cues';
 import { useTranscription } from '../hooks/history/useTranscription';
 import { useProfile } from '../contexts/ProfileContext';
 import { ApiError } from '../services/api';
-import { parseDuration, getDateGroupKey } from '../lib/date';
+import { parseDuration } from '../lib/date';
 import { ROUTES } from '../lib/constants';
-import type { Recording, ProcessedFile, CueRecording, CueWithRecordingsResponse } from '../types';
+import type { Recording, ProcessedFile } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RECORDING DETAIL PAGE
@@ -30,25 +30,17 @@ function RecordingDetailPage() {
   const navigate = useNavigate();
   const { activeProfile } = useProfile();
 
-  const handleBack = useCallback(() => {
-    navigate(ROUTES.HISTORY);
-  }, [navigate]);
-
   // Recording can be passed via location state or fetched from history
   const [recording, setRecording] = useState<Recording | null>(
     location.state?.recording || null
   );
-  const [cueData, setCueData] = useState<CueWithRecordingsResponse | null>(null);
   const [processedFiles, setProcessedFiles] = useState<ProcessedFile[]>(
     location.state?.processedFiles || []
   );
   const [isLoading, setIsLoading] = useState(!location.state?.recording);
   const [error, setError] = useState<string | null>(null);
   const [showTranscriptModal, setShowTranscriptModal] = useState(false);
-  const [selectedRecordingId, setSelectedRecordingId] = useState<number | null>(
-    recordingId ? parseInt(recordingId, 10) : null
-  );
-  const [isRecordingMode, setIsRecordingMode] = useState(false);
+  const [recordingCount, setRecordingCount] = useState<number>(0);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Fetch recording from history if not passed via state
@@ -79,12 +71,16 @@ function RecordingDetailPage() {
         setRecording(foundRecording);
         setProcessedFiles(response.processedFiles || []);
         
-        // Fetch the cue with all its recordings
-        const cueResponse = await cuesApi.getCueForProfile({
-          profileId: activeProfile.profileId,
-          cueId: foundRecording.cueId,
-        });
-        setCueData(cueResponse);
+        // Fetch recording count for this cue
+        try {
+          const cueResponse = await cuesApi.getCueForProfile({
+            profileId: activeProfile.profileId,
+            cueId: foundRecording.cueId,
+          });
+          setRecordingCount(cueResponse.cue?.recordings?.length || 0);
+        } catch (err) {
+          console.error('Failed to fetch recording count:', err);
+        }
       } else {
         setError('Recording not found');
       }
@@ -99,7 +95,7 @@ function RecordingDetailPage() {
     }
   }, [recordingId, activeProfile]);
 
-  // Refresh function for transcription polling and after new recording
+  // Refresh function for transcription polling
   const refreshRecording = useCallback(async () => {
     if (!activeProfile || !recording) return;
     
@@ -116,12 +112,16 @@ function RecordingDetailPage() {
         setRecording(foundRecording);
         setProcessedFiles(response.processedFiles || []);
         
-        // Also refresh cue data
-        const cueResponse = await cuesApi.getCueForProfile({
-          profileId: activeProfile.profileId,
-          cueId: foundRecording.cueId,
-        });
-        setCueData(cueResponse);
+        // Also update recording count
+        try {
+          const cueResponse = await cuesApi.getCueForProfile({
+            profileId: activeProfile.profileId,
+            cueId: foundRecording.cueId,
+          });
+          setRecordingCount(cueResponse.cue?.recordings?.length || 0);
+        } catch (err) {
+          console.error('Failed to fetch recording count:', err);
+        }
       }
     } catch (err) {
       console.error('Failed to refresh recording:', err);
@@ -131,41 +131,77 @@ function RecordingDetailPage() {
   useEffect(() => {
     if (!recording && activeProfile) {
       fetchRecording();
+    } else if (recording && activeProfile && recordingCount === 0) {
+      // Fetch recording count if we have a recording but no count yet
+      const fetchCount = async () => {
+        try {
+          const cueResponse = await cuesApi.getCueForProfile({
+            profileId: activeProfile.profileId,
+            cueId: recording.cueId,
+          });
+          setRecordingCount(cueResponse.cue?.recordings?.length || 0);
+        } catch (err) {
+          console.error('Failed to fetch recording count:', err);
+        }
+      };
+      fetchCount();
     }
-  }, [recording, activeProfile, fetchRecording]);
+  }, [recording, activeProfile, fetchRecording, recordingCount]);
 
-  // Transcription hook for selected recording
-  const selectedCueRecording = cueData?.cue?.recordings?.find(
-    (r) => r.profileCueRecordingId === selectedRecordingId
-  );
-
-  // Convert CueRecording to Recording for the transcription hook
-  const selectedRecording: Recording | null = selectedCueRecording && cueData?.cue ? {
-    ...selectedCueRecording,
-    cue: cueData.cue,
-  } : recording;
-
+  // Transcription hook for the recording
   const {
     transcription,
     status: transcriptionStatus,
     isRequesting: isRequestingTranscription,
     requestTranscription,
   } = useTranscription({ 
-    recording: selectedRecording, 
+    recording, 
     onRefresh: refreshRecording,
   });
 
-  // Handle new recording saved
-  const handleRecordingSaved = useCallback(() => {
-    setIsRecordingMode(false);
-    refreshRecording();
-  }, [refreshRecording]);
+  // Navigation handlers
+  const handleRecordAgain = useCallback(() => {
+    if (recording) {
+      navigate(ROUTES.CUE_DETAIL.replace(':cueId', String(recording.cueId)));
+    }
+  }, [navigate, recording]);
+
+  const handleViewAllRecordings = useCallback(() => {
+    if (recording) {
+      navigate(ROUTES.CUE_HISTORY.replace(':cueId', String(recording.cueId)));
+    }
+  }, [navigate, recording]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Get recording info
+  // Recording count display for header
   // ─────────────────────────────────────────────────────────────────────────
 
-  useAppHeader({ title: '', showBack: true, onBack: handleBack });
+  const recordingCountDisplay = useMemo(() => {
+    if (!recording || recordingCount === 0) return null;
+    
+    return (
+      <button
+        type="button"
+        onClick={handleViewAllRecordings}
+        className="inline-flex items-center gap-3 px-4 py-2.5 rounded-lg bg-black/5 hover:bg-black/10 text-text-primary transition-all focus:outline-none cursor-pointer focus-visible:ring-2 focus-visible:ring-app-green-strong focus-visible:ring-offset-1"
+      >
+        <div className="flex items-center gap-1.5">
+          <HiOutlineChartBar className="w-4 h-4" />
+          <span className="text-label-md">
+            Recordings: <span className="font-semibold">{recordingCount}</span>
+          </span>
+        </div>
+        <span className="text-label-md font-medium">
+          View →
+        </span>
+      </button>
+    );
+  }, [recordingCount, recording, handleViewAllRecordings]);
+
+  useAppHeader({ 
+    title: '',
+    rightAction: recordingCountDisplay,
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // Loading state
@@ -198,20 +234,19 @@ function RecordingDetailPage() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render
+  // Get audio file info
   // ─────────────────────────────────────────────────────────────────────────
 
-  // Group recordings by date
-  const cueRecordings = cueData?.cue?.recordings || [];
-  const groupedRecordings = cueRecordings.reduce((acc: Record<string, { label: string; recordings: CueRecording[] }>, rec: CueRecording) => {
-    const { key, label } = getDateGroupKey(rec.createdAt);
-    if (!acc[key]) {
-      acc[key] = { label, recordings: [] };
-    }
-    acc[key].recordings.push(rec);
-    return acc;
-  }, {});
-  const groups = Object.values(groupedRecordings);
+  const audioFile = processedFiles.find(
+    (pf) => pf.fileId === recording.fileId
+  );
+  const audioUrl = audioFile?.url || null;
+  const durationStr = recording.file?.metadata?.duration;
+  const durationMs = durationStr ? parseDuration(durationStr) : 0;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div>
@@ -220,118 +255,75 @@ function RecordingDetailPage() {
         <Card>
           <CardContent className="py-6">
             <CueContentMarkdown
-              title={recording.cue?.content?.title || cueData?.cue?.content?.title}
-              details={recording.cue?.content?.details || cueData?.cue?.content?.details}
+              title={recording.cue?.content?.title}
+              details={recording.cue?.content?.details}
               className="text-body-md"
             />
           </CardContent>
         </Card>
 
-        {/* Recording mode */}
-        {isRecordingMode ? (
-          <RecordingControls
-            cueId={recording.cueId}
-            onRecordingSaved={handleRecordingSaved}
-          />
-        ) : (
-          <>
-            {/* Record new take button */}
-            <div className="flex justify-end">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setIsRecordingMode(true)}
-                className="!bg-app-green-strong !text-white hover:!bg-app-green-deep !rounded-full"
-                leftIcon={<HiOutlineMicrophone className="w-5 h-5" />}
-              >
-                New Recording
-              </Button>
-            </div>
+        {/* New Recording button */}
+        <div className="flex justify-end">
+          <NewRecordingButton onClick={handleRecordAgain} />
+        </div>
 
-            {/* Recording history */}
-            {groups.length > 0 && (
-              <div className="space-y-6">
-                <h2 className="text-heading-lg font-semibold text-text-primary">
-                  Recording History
-                </h2>
+        <div className="space-y-3">
+          {/* Recording date badge */}
+          <div className="px-1">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/5 text-text-primary text-label-md">
+              <HiOutlineCalendar className="w-3.5 h-3.5" />
+              {new Date(recording.createdAt).toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </span>
+          </div>
 
-                {groups.map((group, groupIndex) => (
-                  <div key={groupIndex} className="space-y-3">
-                    {/* Group header with date badge + count */}
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/5 text-text-primary text-label-md">
-                        <HiOutlineCalendar className="w-3.5 h-3.5" />
-                        {group.label}
-                      </span>
-                      <span className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-app-green text-text-primary text-label-md">
-                        {group.recordings.length}
-                      </span>
-                    </div>
+          {/* Recording card */}
+          <Card className="bg-app-beige">
+            <CardContent className="space-y-4">
+              {/* Recording time */}
+              <p className="text-body-sm text-text-primary">
+                {new Date(recording.createdAt).toLocaleString('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true,
+                })}
+              </p>
 
-                    {/* Recordings */}
-                    <div className="space-y-6">
-                      {group.recordings.map((rec) => {
-                        const audioFile = processedFiles.find(
-                          (pf) => pf.fileId === rec.fileId
-                        );
-                        const audioUrl = audioFile?.url || null;
-                        const durationStr = rec.file?.metadata?.duration;
-                        const durationMs = durationStr ? parseDuration(durationStr) : 0;
-
-                        return (
-                          <Card key={rec.profileCueRecordingId} className="bg-app-beige">
-                            <CardContent className="space-y-2">
-                              {/* Recording time */}
-                              <p className="text-caption text-text-tertiary">
-                                {new Date(rec.createdAt).toLocaleString('en-US', {
-                                  hour: 'numeric',
-                                  minute: '2-digit',
-                                  hour12: true,
-                                })}
-                              </p>
-
-                              {/* Audio player with background */}
-                              {audioUrl && (
-                                <div className="bg-app-beige-dark rounded-lg p-4 py-6">
-                                  <AudioPlayer
-                                    id={`recording-${rec.profileCueRecordingId}`}
-                                    url={audioUrl}
-                                    durationMs={durationMs}
-                                  />
-                                </div>
-                              )}
-
-                              {/* View Report button */}
-                                <Button
-                                  variant="primary"
-                                  size="lg"
-                                  onClick={() => {
-                                    setSelectedRecordingId(rec.profileCueRecordingId);
-                                    setShowTranscriptModal(true);
-                                  }}
-                                  className="!w-full !bg-app-green-strong !text-white hover:!bg-app-green-deep"
-                                  leftIcon={<HiOutlineDocumentText className="w-5 h-5" />}
-                                >
-                                  View Report
-                                </Button>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+            {/* Audio player with background */}
+            {audioUrl && (
+              <div className="bg-app-beige-dark rounded-lg p-4 py-6">
+                <AudioPlayer
+                  id={`recording-${recording.profileCueRecordingId}`}
+                  url={audioUrl}
+                  durationMs={durationMs}
+                />
               </div>
             )}
-          </>
-        )}
+
+            {/* View Report button */}
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={() => setShowTranscriptModal(true)}
+              className="!w-full !bg-app-green-strong !text-white hover:!bg-app-green-deep"
+              leftIcon={<HiOutlineDocumentText className="w-5 h-5" />}
+            >
+              View Report
+            </Button>
+          </CardContent>
+        </Card>
+        </div>
       </div>
 
       {/* Transcript Modal */}
       <Modal
         isOpen={showTranscriptModal}
         onClose={() => setShowTranscriptModal(false)}
-        title={recording.cue?.content?.title || cueData?.cue?.content?.title || 'Recording Report'}
+        title={recording.cue?.content?.title || 'Recording Report'}
       >
         <div className="space-y-4">
           {/* Status badge */}

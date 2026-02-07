@@ -1,5 +1,5 @@
 import { HiPlay, HiPause } from 'react-icons/hi2';
-import { PiArrowArcLeft, PiArrowArcRight } from 'react-icons/pi';
+import { MdReplay10, MdForward10 } from 'react-icons/md';
 import { AudioProgress } from '../ui/Progress';
 import { cn } from '../../lib/cn';
 import { formatDurationMs } from '../../lib/date';
@@ -58,31 +58,32 @@ export function AudioPlayer({
 
       {/* Time display */}
       {showDuration && displayDuration > 0 && (
-        <div className="flex justify-between text-caption text-text-tertiary px-1">
+        <div className="flex justify-between text-caption text-text-primary px-1">
           <span>{formatDurationMs(displayCurrentTime)}</span>
           <span>{formatDurationMs(displayDuration)}</span>
         </div>
       )}
 
       {/* Playback controls */}
-      <div className="flex items-center justify-center gap-6">
+      <div className="flex items-center justify-center gap-10">
         {/* Skip backward 10s */}
         <button
           type="button"
           onClick={() => seek(Math.max(0, currentTime - 10))}
           disabled={!url}
           className={cn(
-            'w-9 h-9 flex-shrink-0 rounded-full',
+            'flex-shrink-0 rounded-full',
             'flex items-center justify-center',
-            'bg-black/10 text-text-primary',
-            'hover:bg-black/15',
+            'text-text-primary',
+            'hover:bg-black/10',
             'transition-all duration-150',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            'active:scale-95'
+            'active:scale-95',
+            'p-2'
           )}
           aria-label="Skip backward 10 seconds"
         >
-          <PiArrowArcLeft className="w-5 h-5" />
+          <MdReplay10 className="w-9 h-9" />
         </button>
 
         {/* Play/Pause */}
@@ -113,17 +114,18 @@ export function AudioPlayer({
           onClick={() => seek(Math.min(duration, currentTime + 10))}
           disabled={!url}
           className={cn(
-            'w-9 h-9 flex-shrink-0 rounded-full',
+            'flex-shrink-0 rounded-full',
             'flex items-center justify-center',
-            'bg-black/10 text-text-primary',
-            'hover:bg-black/15',
+            'text-text-primary',
+            'hover:bg-black/10',
             'transition-all duration-150',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            'active:scale-95'
+            'active:scale-95',
+            'p-2'
           )}
           aria-label="Skip forward 10 seconds"
         >
-          <PiArrowArcRight className="w-5 h-5" />
+          <MdForward10 className="w-9 h-9" />
         </button>
       </div>
     </div>

@@ -61,6 +61,7 @@ export const ROUTES = {
   APP: '/app',
   CUES: '/app/cues',
   CUE_DETAIL: '/app/cues/:cueId',
+  CUE_HISTORY: '/app/cues/:cueId/history',
   HISTORY: '/app/history',
   RECORDING_DETAIL: '/app/history/:recordingId',
   SETTINGS: '/app/settings',

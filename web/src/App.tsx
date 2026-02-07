@@ -34,6 +34,7 @@ import RequestAccountRestorePage from './pages/RequestAccountRestorePage';
 // Lazy load feature pages
 const CuesPage = lazy(() => import('./pages/CuesPage'));
 const CueDetailPage = lazy(() => import('./pages/CueDetailPage'));
+const CueHistoryPage = lazy(() => import('./pages/CueHistoryPage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
 const RecordingDetailPage = lazy(() => import('./pages/RecordingDetailPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
@@ -114,6 +115,14 @@ function AppBootstrap() {
             element={
               <Suspense fallback={lazyFallback}>
                 <CueDetailPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="cues/:cueId/history"
+            element={
+              <Suspense fallback={lazyFallback}>
+                <CueHistoryPage />
               </Suspense>
             }
           />
