@@ -19,6 +19,10 @@ interface UseRecorderReturn {
   error: string | null;
   /** Start recording */
   start: () => Promise<void>;
+  /** Pause recording */
+  pause: () => void;
+  /** Resume recording */
+  resume: () => void;
   /** Stop recording */
   stop: () => void;
   /** Reset recorder (clear recording) */
@@ -57,6 +61,7 @@ export function useRecorder(): UseRecorderReturn {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
+  const pausedTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Check if recording is supported
@@ -66,7 +71,7 @@ export function useRecorder(): UseRecorderReturn {
   // Cleanup
   // ─────────────────────────────────────────────────────────────────────────
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((skipEvents = false) => {
     // Stop timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -75,6 +80,12 @@ export function useRecorder(): UseRecorderReturn {
 
     // Stop and cleanup media recorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      // Remove event handlers if skipping events (e.g., during reset)
+      if (skipEvents) {
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.onerror = null;
+      }
       mediaRecorderRef.current.stop();
     }
     mediaRecorderRef.current = null;
@@ -188,6 +199,41 @@ export function useRecorder(): UseRecorderReturn {
   }, [isSupported, audioUrl, cleanup]);
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Pause recording
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const pause = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      pausedTimeRef.current = Date.now() - startTimeRef.current;
+      setDurationMs(pausedTimeRef.current);
+      mediaRecorderRef.current.pause();
+      setState('paused');
+    }
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Resume recording
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const resume = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
+      mediaRecorderRef.current.resume();
+      startTimeRef.current = Date.now() - pausedTimeRef.current;
+      setState('recording');
+
+      // Restart timer
+      timerRef.current = setInterval(() => {
+        setDurationMs(Date.now() - startTimeRef.current);
+      }, 100);
+    }
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Stop recording
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -197,9 +243,12 @@ export function useRecorder(): UseRecorderReturn {
       timerRef.current = null;
     }
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    const currentState = mediaRecorderRef.current?.state;
+    if (mediaRecorderRef.current && (currentState === 'recording' || currentState === 'paused')) {
       // Calculate final duration
-      setDurationMs(Date.now() - startTimeRef.current);
+      if (currentState === 'recording') {
+        setDurationMs(Date.now() - startTimeRef.current);
+      }
       mediaRecorderRef.current.stop();
     }
   }, []);
@@ -209,7 +258,7 @@ export function useRecorder(): UseRecorderReturn {
   // ─────────────────────────────────────────────────────────────────────────
 
   const reset = useCallback(() => {
-    cleanup();
+    cleanup(true); // Skip events to prevent onstop from firing
 
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
@@ -218,6 +267,7 @@ export function useRecorder(): UseRecorderReturn {
     setAudioBlob(null);
     setAudioUrl(null);
     setDurationMs(0);
+    pausedTimeRef.current = 0;
     setError(null);
     setState('idle');
   }, [cleanup, audioUrl]);
@@ -246,6 +296,8 @@ export function useRecorder(): UseRecorderReturn {
     durationMs,
     error,
     start,
+    pause,
+    resume,
     stop,
     reset,
     isSupported,

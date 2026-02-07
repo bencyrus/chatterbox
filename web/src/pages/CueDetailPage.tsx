@@ -87,14 +87,10 @@ function CueDetailPage() {
         </Card>
 
         {/* Recording controls */}
-        <Card className="bg-surface-secondary border-border-secondary">
-          <CardContent>
-            <RecordingControls
-              cueId={cue.cueId}
-              onRecordingSaved={handleRecordingSaved}
-            />
-          </CardContent>
-        </Card>
+        <RecordingControls
+          cueId={cue.cueId}
+          onRecordingSaved={handleRecordingSaved}
+        />
       </div>
     </div>
   );

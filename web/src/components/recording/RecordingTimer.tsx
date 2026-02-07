@@ -26,22 +26,12 @@ export function RecordingTimer({
   return (
     <div
       className={cn(
-        'flex items-center justify-center gap-2',
+        'flex items-center justify-center',
         className
       )}
     >
-      {/* Pulsing indicator when recording */}
-      {isRecording && (
-        <span className="w-3 h-3 rounded-full bg-recording-active animate-pulse-recording" />
-      )}
-      
-      {/* Timer display */}
-      <span
-        className={cn(
-          'font-mono text-heading-md font-semibold',
-          isRecording ? 'text-recording-active' : 'text-text-primary'
-        )}
-      >
+      {/* Timer display - always black */}
+      <span className="font-mono text-4xl font-medium text-text-primary">
         {formatDurationMs(durationMs)}
       </span>
     </div>

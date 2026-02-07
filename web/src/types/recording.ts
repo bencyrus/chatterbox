@@ -133,4 +133,4 @@ export interface TranscriptionRequestResponse {
 // RECORDER STATE (UI state for recording component)
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type RecorderState = 'idle' | 'recording' | 'stopped';
+export type RecorderState = 'idle' | 'recording' | 'paused' | 'stopped';
