@@ -64,3 +64,31 @@ export function getRemainingCooldown(): number {
   const remaining = cooldownEnd - Date.now();
   return remaining > 0 ? remaining : 0;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PWA UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if the app is running in standalone PWA mode
+ */
+export function isPWAMode(): boolean {
+  // Check if running in standalone mode (iOS)
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    return true;
+  }
+  
+  // Check iOS standalone mode
+  if ((window.navigator as any).standalone === true) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if the app is installable as a PWA
+ */
+export function canInstallPWA(): boolean {
+  return 'serviceWorker' in navigator && 'PushManager' in window;
+}

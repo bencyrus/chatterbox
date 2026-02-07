@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { HiOutlineCheckCircle, HiOutlineExclamationTriangle } from 'react-icons/hi2';
+import { HiOutlineCheckCircle, HiOutlineExclamationTriangle, HiOutlineDevicePhoneMobile } from 'react-icons/hi2';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { authApi } from '../services/auth';
@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { ROUTES } from '../lib/constants';
 import { ApiError } from '../services/api';
+import { isPWAMode } from '../lib/storage';
 
 // Default language if none set
 const DEFAULT_LANGUAGE = 'en';
@@ -17,7 +18,7 @@ const DEFAULT_LANGUAGE = 'en';
 // MAGIC LINK PAGE
 // ═══════════════════════════════════════════════════════════════════════════
 
-type PageState = 'loading' | 'success' | 'error' | 'no-token';
+type PageState = 'loading' | 'success' | 'success-browser' | 'error' | 'no-token';
 
 function MagicLinkPage() {
   const location = useLocation();
@@ -31,6 +32,7 @@ function MagicLinkPage() {
   const [pageState, setPageState] = useState<PageState>(token ? 'loading' : 'no-token');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const [isInPWA, setIsInPWA] = useState<boolean>(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Handle login
@@ -43,6 +45,10 @@ function MagicLinkPage() {
     }
 
     try {
+      // Check if running in PWA mode
+      const inPWA = isPWAMode();
+      setIsInPWA(inPWA);
+
       // Login with magic token
       await authApi.loginWithMagicToken({ token });
       
@@ -81,8 +87,13 @@ function MagicLinkPage() {
           }
         }
         
-        setPageState('success');
-        setRedirectCountdown(3);
+        // If in PWA, redirect normally. If in browser, show PWA open prompt
+        if (inPWA) {
+          setPageState('success');
+          setRedirectCountdown(3);
+        } else {
+          setPageState('success-browser');
+        }
       } else {
         throw new Error('Failed to get account info');
       }
@@ -98,7 +109,7 @@ function MagicLinkPage() {
         setErrorMessage('Something went wrong. Please try again.');
       }
     }
-  }, [token, setAccount, setActiveProfile, navigate]);
+  }, [token, setAccount, setActiveProfile]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Effect: Login on mount
@@ -141,17 +152,16 @@ function MagicLinkPage() {
     navigate(ROUTES.LOGIN);
   }, [navigate]);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // App redirect (for mobile deep link)
-  // ─────────────────────────────────────────────────────────────────────────
+  const handleContinueInBrowser = useCallback(() => {
+    navigate(ROUTES.APP);
+  }, [navigate]);
 
-  const appUrl = token
-    ? `chatterbox://auth/magic?token=${encodeURIComponent(token)}`
-    : 'chatterbox://auth/magic';
-
-  const handleOpenApp = useCallback(() => {
-    window.location.href = appUrl;
-  }, [appUrl]);
+  const handleOpenPWA = useCallback(() => {
+    // Get the base URL without the /auth/magic path
+    const baseUrl = window.location.origin;
+    // Try to open the PWA - this works if user has added to home screen
+    window.location.href = baseUrl + ROUTES.APP;
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -181,7 +191,7 @@ function MagicLinkPage() {
           </>
         )}
 
-        {/* Success state */}
+        {/* Success state - in PWA */}
         {pageState === 'success' && (
           <>
             <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-app-green/20 flex items-center justify-center">
@@ -194,6 +204,53 @@ function MagicLinkPage() {
               You've been signed in successfully. Redirecting in{' '}
               {redirectCountdown ?? 3} seconds.
             </p>
+          </>
+        )}
+
+        {/* Success state - in browser (show PWA prompt) */}
+        {pageState === 'success-browser' && (
+          <>
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-app-green/20 flex items-center justify-center">
+              <HiOutlineCheckCircle className="w-8 h-8 text-app-green-dark" />
+            </div>
+            <h1 className="text-heading-lg font-semibold text-text-primary mb-2">
+              You're signed in!
+            </h1>
+            <p className="text-body-md text-text-secondary mb-6">
+              To continue, open the Chatterbox app from your home screen.
+            </p>
+            
+            {/* Action buttons */}
+            <div className="space-y-3">
+              <Button
+                variant="primary"
+                onClick={handleOpenPWA}
+                className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
+                leftIcon={<HiOutlineDevicePhoneMobile />}
+              >
+                Open Chatterbox App
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleContinueInBrowser}
+                className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
+              >
+                Continue in browser
+              </Button>
+            </div>
+            
+            {/* Instructions */}
+            <div className="mt-6 p-4 bg-app-sand-light rounded-2xl text-left">
+              <p className="text-body-sm text-text-secondary mb-2">
+                <strong className="text-text-primary">If you haven't added Chatterbox to your home screen yet:</strong>
+              </p>
+              <ol className="text-body-sm text-text-secondary space-y-1 list-decimal list-inside">
+                <li>Tap the Share button in Safari</li>
+                <li>Select "Add to Home Screen"</li>
+                <li>Tap "Add"</li>
+                <li>Open Chatterbox from your home screen</li>
+              </ol>
+            </div>
           </>
         )}
 
@@ -226,28 +283,15 @@ function MagicLinkPage() {
               Sign in to Chatterbox
             </h1>
             <p className="text-body-md text-text-secondary mb-6">
-              This link is meant to sign you into the Chatterbox app.
+              This link is missing a valid token. Please request a new sign-in link.
             </p>
-            <div className="space-y-3">
-              <Button
-                variant="primary"
-                onClick={handleOpenApp}
-                className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
-              >
-                Open in Chatterbox app
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handleGoToLogin}
-                className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
-              >
-                Continue on web
-              </Button>
-            </div>
-            <p className="text-body-sm text-text-tertiary mt-6">
-              If you opened this link from an email, the app should open automatically.
-              If not, tap the button above.
-            </p>
+            <Button
+              variant="primary"
+              onClick={handleGoToLogin}
+              className="w-full bg-success-600 text-white hover:bg-success-700 active:bg-success-700"
+            >
+              Go to login
+            </Button>
           </>
         )}
       </div>
