@@ -1,0 +1,25 @@
+{
+  "name": "Chatterbox - Your Voice Companion",
+  "short_name": "Chatterbox",
+  "description": "Practice speaking any language with confidence",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F5E6D3",
+  "background_color": "#F5E6D3",
+  "icons": [
+    {
+      "src": "https://storage.googleapis.com/chatterbox-public-assets/public-chatterbox-logo-color-bg.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://storage.googleapis.com/chatterbox-public-assets/public-chatterbox-logo-color-bg.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
