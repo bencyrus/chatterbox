@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { ROUTES } from '../lib/constants';
 import { ApiError } from '../services/api';
-import { isPWAMode } from '../lib/storage';
+import { isPWAMode, getTokens } from '../lib/storage';
 
 // Default language if none set
 const DEFAULT_LANGUAGE = 'en';
@@ -211,6 +211,16 @@ function MagicLinkPage() {
               Your login is ready.
             </p>
             
+            {/* Token confirmation */}
+            <div className="mb-4 p-3 bg-success-50 border border-success-200 rounded-xl">
+              <p className="text-body-sm text-success-700">
+                ✅ Auth tokens saved to this browser
+              </p>
+              <p className="text-body-xs text-success-600 font-mono mt-1">
+                Origin: {window.location.origin}
+              </p>
+            </div>
+            
             {/* Main instruction - emphasized */}
             <div className="my-6 p-5 bg-success-50 border-2 border-success-600 rounded-2xl">
               <div className="flex items-start gap-3 mb-3">
@@ -227,13 +237,22 @@ function MagicLinkPage() {
             </div>
             
             {/* Fallback option */}
-            <Button
-              variant="secondary"
-              onClick={handleContinueInBrowser}
-              className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark mb-6"
-            >
-              Continue in browser instead
-            </Button>
+            <div className="space-y-2 mb-6">
+              <Button
+                variant="secondary"
+                onClick={handleContinueInBrowser}
+                className="w-full bg-app-beige text-text-primary border border-border-secondary hover:bg-app-beige-dark"
+              >
+                Continue in browser instead
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/debug')}
+                className="w-full bg-app-sand-light text-text-secondary border border-border-secondary hover:bg-app-beige-dark text-sm"
+              >
+                🔍 View Debug Info
+              </Button>
+            </div>
             
             {/* First-time setup instructions */}
             <div className="p-4 bg-app-sand-light rounded-2xl text-left border border-border-secondary">

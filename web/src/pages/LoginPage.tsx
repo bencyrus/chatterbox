@@ -165,10 +165,18 @@ function LoginPage() {
 
         {/* Info */}
         <div className="mt-8 text-center">
-          <p className="text-body-sm text-text-tertiary">
+          <p className="text-body-sm text-text-tertiary mb-3">
             <HiOutlineEnvelope className="inline-block w-4 h-4 mr-1 -mt-0.5" />
             We'll send you a magic link to sign in
           </p>
+          
+          {/* Debug link */}
+          <button
+            onClick={() => window.location.href = '/debug'}
+            className="text-body-xs text-text-tertiary hover:text-text-secondary underline"
+          >
+            🔍 Debug Info
+          </button>
         </div>
       </div>
       </div>

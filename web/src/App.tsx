@@ -30,6 +30,7 @@ import LoginPage from './pages/LoginPage';
 import MagicLinkPage from './pages/MagicLinkPage';
 import PrivacyPage from './pages/PrivacyPage';
 import RequestAccountRestorePage from './pages/RequestAccountRestorePage';
+import DebugPage from './pages/DebugPage';
 
 // Lazy load feature pages
 const CuesPage = lazy(() => import('./pages/CuesPage'));
@@ -79,6 +80,9 @@ function AppBootstrap() {
 
         {/* Magic link callback */}
         <Route path={ROUTES.MAGIC_LINK} element={<MagicLinkPage />} />
+
+        {/* Debug page */}
+        <Route path="/debug" element={<DebugPage />} />
 
         {/* Static pages */}
         <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />

@@ -38,13 +38,17 @@ export function useBootstrap(): UseBootstrapReturn {
 
     // Check if we have stored tokens
     if (!hasTokens()) {
+      console.log('[Bootstrap] No tokens found in localStorage');
       setLoading(false);
       return;
     }
 
+    console.log('[Bootstrap] Tokens found, validating...');
+
     try {
       // Validate tokens by fetching user data
       const response = await authApi.me();
+      console.log('[Bootstrap] Token validation successful', response.account);
       
       if (response.account) {
         setAccount(response.account);
@@ -88,8 +92,9 @@ export function useBootstrap(): UseBootstrapReturn {
         resetProfile();
         logout();
       }
-    } catch {
+    } catch (err) {
       // Token validation failed, clear tokens
+      console.error('[Bootstrap] Token validation failed:', err);
       clearTokens();
       resetProfile();
       logout();

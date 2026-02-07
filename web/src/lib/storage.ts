@@ -14,13 +14,24 @@ const TOKEN_KEYS = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function getTokens(): { accessToken: string | null; refreshToken: string | null } {
-  return {
+  const tokens = {
     accessToken: localStorage.getItem(TOKEN_KEYS.ACCESS),
     refreshToken: localStorage.getItem(TOKEN_KEYS.REFRESH),
   };
+  console.log('[Storage] getTokens called:', { 
+    hasAccess: !!tokens.accessToken, 
+    hasRefresh: !!tokens.refreshToken,
+    origin: window.location.origin,
+    isPWA: isPWAMode()
+  });
+  return tokens;
 }
 
 export function setTokens(accessToken: string, refreshToken: string): void {
+  console.log('[Storage] setTokens called:', { 
+    origin: window.location.origin,
+    isPWA: isPWAMode()
+  });
   localStorage.setItem(TOKEN_KEYS.ACCESS, accessToken);
   localStorage.setItem(TOKEN_KEYS.REFRESH, refreshToken);
 }
