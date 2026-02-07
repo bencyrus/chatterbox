@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 
 // Providers
 import {
@@ -8,6 +8,7 @@ import {
   ProfileProvider,
   ConfigProvider,
   AudioProvider,
+  AppEnvProvider,
 } from './contexts';
 
 // Route guards
@@ -22,7 +23,7 @@ import { ToastContainer } from './components/feedback/Toast';
 import { LoadingScreen } from './components/feedback/LoadingScreen';
 
 // Bootstrap hook
-import { useBootstrap } from './hooks/auth/useBootstrap';
+import { useAuthSession } from './hooks/auth/useAuthSession';
 
 // Pages (eager load critical pages)
 import HomePage from './pages/HomePage';
@@ -30,7 +31,6 @@ import LoginPage from './pages/LoginPage';
 import MagicLinkPage from './pages/MagicLinkPage';
 import PrivacyPage from './pages/PrivacyPage';
 import RequestAccountRestorePage from './pages/RequestAccountRestorePage';
-import DebugPage from './pages/DebugPage';
 
 // Lazy load feature pages
 const CuesPage = lazy(() => import('./pages/CuesPage'));
@@ -52,7 +52,11 @@ import { ROUTES } from './lib/constants';
  */
 function AppBootstrap() {
   // Initialize auth state on mount
-  useBootstrap();
+  const { bootstrap } = useAuthSession();
+
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   const lazyFallback = (
     <LoadingScreen message="Loading..." fullScreen={false} />
@@ -80,9 +84,6 @@ function AppBootstrap() {
 
         {/* Magic link callback */}
         <Route path={ROUTES.MAGIC_LINK} element={<MagicLinkPage />} />
-
-        {/* Debug page */}
-        <Route path="/debug" element={<DebugPage />} />
 
         {/* Static pages */}
         <Route path={ROUTES.PRIVACY} element={<PrivacyPage />} />
@@ -182,17 +183,19 @@ function App() {
         v7_relativeSplatPath: true,
       }}
     >
-      <ConfigProvider>
-        <AuthProvider>
-          <ProfileProvider>
-            <AudioProvider>
-              <ToastProvider>
-                <AppBootstrap />
-              </ToastProvider>
-            </AudioProvider>
-          </ProfileProvider>
-        </AuthProvider>
-      </ConfigProvider>
+      <AppEnvProvider>
+        <ConfigProvider>
+          <AuthProvider>
+            <ProfileProvider>
+              <AudioProvider>
+                <ToastProvider>
+                  <AppBootstrap />
+                </ToastProvider>
+              </AudioProvider>
+            </ProfileProvider>
+          </AuthProvider>
+        </ConfigProvider>
+      </AppEnvProvider>
     </Router>
   );
 }

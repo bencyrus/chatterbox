@@ -41,7 +41,7 @@ export function PublicOnlyRoute({ children }: PublicOnlyRouteProps) {
   // Redirect to home (or intended destination) if already authenticated
   if (isAuthenticated) {
     const state = location.state as LocationState | null;
-    const from = state?.from?.pathname || ROUTES.HOME;
+    const from = state?.from?.pathname || ROUTES.APP;
     return <Navigate to={from} replace />;
   }
 

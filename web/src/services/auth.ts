@@ -1,6 +1,6 @@
 /**
  * Authentication service
- * PostgREST RPC endpoints for magic link authentication
+ * PostgREST RPC endpoints for magic link and OTP authentication
  */
 
 import { apiClient } from './api';
@@ -10,6 +10,10 @@ import type {
   RequestMagicLinkResponse,
   LoginWithMagicTokenRequest,
   LoginWithMagicTokenResponse,
+  RequestLoginCodeRequest,
+  RequestLoginCodeResponse,
+  LoginWithCodeRequest,
+  LoginWithCodeResponse,
   MeResponse,
   AppConfigResponse,
 } from '../types';
@@ -55,6 +59,46 @@ export async function loginWithMagicToken(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// OTP (ONE-TIME PASSWORD)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Request a login code to be sent to the user's email/phone
+ * POST /rpc/request_login_code
+ */
+export async function requestLoginCode(
+  data: RequestLoginCodeRequest
+): Promise<RequestLoginCodeResponse> {
+  return apiClient.post<RequestLoginCodeResponse>(
+    '/rpc/request_login_code',
+    data,
+    { requiresAuth: false }
+  );
+}
+
+/**
+ * Login with a one-time code (from email/SMS)
+ * POST /rpc/login_with_code
+ * Stores tokens automatically on success
+ */
+export async function loginWithCode(
+  data: LoginWithCodeRequest
+): Promise<LoginWithCodeResponse> {
+  const response = await apiClient.post<LoginWithCodeResponse>(
+    '/rpc/login_with_code',
+    data,
+    { requiresAuth: false }
+  );
+  
+  // Store tokens
+  if (response.accessToken && response.refreshToken) {
+    setTokens(response.accessToken, response.refreshToken);
+  }
+  
+  return response;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // USER DATA
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -85,6 +129,8 @@ export async function appConfig(): Promise<AppConfigResponse> {
 export const authApi = {
   requestMagicLink,
   loginWithMagicToken,
+  requestLoginCode,
+  loginWithCode,
   me,
   appConfig,
 };

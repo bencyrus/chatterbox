@@ -25,6 +25,28 @@ export interface LoginWithMagicTokenResponse {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// OTP (One-Time Password / Login Code)
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface RequestLoginCodeRequest {
+  identifier: string; // email or phone
+}
+
+export interface RequestLoginCodeResponse {
+  success: boolean;
+}
+
+export interface LoginWithCodeRequest {
+  identifier: string; // email or phone
+  code: string;       // 6-digit code
+}
+
+export interface LoginWithCodeResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // ACCOUNT
 // ═══════════════════════════════════════════════════════════════════════════
 

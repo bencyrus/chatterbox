@@ -15,7 +15,7 @@ import { ApiError } from '../../services/api';
 
 interface UseMagicLinkReturn {
   /** Request a magic link for the given email */
-  requestLink: (email: string) => Promise<void>;
+  requestLink: (email: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Whether a request is in progress */
   isLoading: boolean;
   /** Error message if request failed */
@@ -69,8 +69,9 @@ export function useMagicLink(): UseMagicLinkReturn {
   const requestLink = useCallback(async (email: string) => {
     // Check cooldown
     if (getRemainingCooldown() > 0) {
-      setError('Please wait before requesting another link');
-      return;
+      const msg = 'Please wait before requesting another link';
+      setError(msg);
+      return { ok: false as const, error: msg };
     }
 
     setIsLoading(true);
@@ -83,11 +84,15 @@ export function useMagicLink(): UseMagicLinkReturn {
       const cooldownEnd = Date.now() + MAGIC_LINK_COOLDOWN_MS;
       setCooldownEnd(cooldownEnd);
       setCooldownSeconds(Math.ceil(MAGIC_LINK_COOLDOWN_MS / 1000));
+      return { ok: true as const };
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
+        return { ok: false as const, error: err.message };
       } else {
-        setError('Failed to send magic link. Please try again.');
+        const msg = 'Failed to send magic link. Please try again.';
+        setError(msg);
+        return { ok: false as const, error: msg };
       }
     } finally {
       setIsLoading(false);
