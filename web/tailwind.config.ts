@@ -26,6 +26,18 @@ export default {
           900: '#0c4a6e',
           950: '#082f49',
         },
+
+        // App (iOS) Colors
+        app: {
+          green: '#b3cbc0',
+          'green-dark': '#7fa395',
+          'green-strong': '#5f7f73',
+          blue: '#bec8e3',
+          'blue-dark': '#8f9bb8',
+          beige: '#f7e4d6',
+          'beige-dark': '#e5d2c4',
+          sand: '#eeeee6',
+        },
         
         // Semantic Colors
         surface: {
@@ -53,9 +65,9 @@ export default {
         success: {
           50:  '#f0fdf4',
           100: '#dcfce7',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
+          500: '#b3cbc0',
+          600: '#7fa395',
+          700: '#7fa395',
         },
         
         warning: {
