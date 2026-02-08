@@ -1,4 +1,4 @@
-.PHONY: up fresh migrate local-up local-up-detached local-fresh local-fresh-detached prod-up prod-up-detached prod-fresh prod-fresh-detached prod-up-with-observability
+.PHONY: up fresh migrate local-up local-up-detached local-fresh local-fresh-detached prod-up prod-up-detached prod-fresh prod-fresh-detached prod-up-with-observability down down-volumes local-down local-down-volumes
 
 LOCAL_COMPOSE := docker compose --progress=plain -f docker-compose.local.yaml
 PROD_COMPOSE := docker compose --progress=plain -f docker-compose.yaml
@@ -80,3 +80,17 @@ prod-fresh-detached:
 
 prod-up-with-observability:
 	COMPOSE_PROFILES=observability $(PROD_COMPOSE) up --build
+
+## Stop targets
+
+down:
+	$(PROD_COMPOSE) down
+
+down-volumes:
+	$(PROD_COMPOSE) down -v
+
+local-down:
+	$(LOCAL_COMPOSE) down
+
+local-down-volumes:
+	$(LOCAL_COMPOSE) down -v

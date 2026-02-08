@@ -5,6 +5,8 @@ Last verified: 2025-10-08
 
 ← Back to [`docs/README.md`](../README.md)
 
+**→ [Quick Reference](./quick-reference.md)** - Common operations (deploy, migrations, backups, logs)
+
 ### Why this exists
 
 - Provide a clear overview of how to run the system locally and in simple deployments, with links to topology and operational scripts.

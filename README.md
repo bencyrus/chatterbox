@@ -1,5 +1,9 @@
 # Chatterbox Documentation Map
 
+**→ [Quick Reference](docs/deploy/quick-reference.md)** - Common operations (deploy, migrations, backups, logs)
+
+---
+
 - [Patterns](docs/patterns/README.md)
 
   - [Facts, Logic, Effects](docs/patterns/facts-logic-effects.md)
@@ -38,5 +42,6 @@
 - [Observability](docs/observability/README.md)
 
 - [Deploy](docs/deploy/README.md)
+  - [Quick Reference](docs/deploy/quick-reference.md) - Common operations
   - [Runtime Topology](docs/deploy/runtime-topology.md)
   - [Backups and Restore](docs/deploy/backups-restore.md)
