@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { authApi } from '../../services/auth';
 import {
   setCooldownEnd,
-  getCooldownEnd,
   clearCooldown,
   getRemainingCooldown,
 } from '../../lib/storage';
