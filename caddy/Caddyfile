@@ -2,7 +2,14 @@ api.chatterboxtalk.com {
     # Add a unique UUID per request to the response headers
     header X-Request-ID {http.request.uuid}
 
-    # Forward all API requests to gateway
+    # Backup API endpoint - must come before catch-all reverse_proxy
+    handle_path /backup* {
+        reverse_proxy db-backup:9212 {
+            header_up X-Request-ID {http.request.uuid}
+        }
+    }
+
+    # Forward all other API requests to gateway
     reverse_proxy gateway:8080 {
         header_up X-Request-ID {http.request.uuid}
         

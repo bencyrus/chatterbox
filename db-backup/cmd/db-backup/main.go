@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,13 +29,6 @@ func main() {
 		"gcs_prefix": cfg.GCSBackupPrefix,
 	})
 
-	// Run one immediate backup on startup
-	logger.Info(ctx, "running immediate backup on startup")
-	if err := runBackup(ctx, cfg); err != nil {
-		logger.Error(ctx, "startup backup failed", err)
-		log.Fatal(err)
-	}
-
 	// Set up cron scheduler
 	c := cron.New()
 	_, err := c.AddFunc(cfg.BackupSchedule, func() {
@@ -52,13 +47,36 @@ func main() {
 		"schedule": cfg.BackupSchedule,
 	})
 
+	// Set up HTTP API server
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/backup", apiKeyAuth(cfg.BackupServiceAPIKey, makeBackupHandler(ctx, cfg)))
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
+	})
+
+	server := &http.Server{
+		Addr:    ":" + cfg.BackupServiceAPIPort,
+		Handler: mux,
+	}
+
+	go func() {
+		logger.Info(ctx, "starting backup API server", logger.Fields{
+			"port": cfg.BackupServiceAPIPort,
+		})
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error(ctx, "API server failed", err)
+		}
+	}()
+
 	// Wait for interrupt signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
-	logger.Info(ctx, "shutdown signal received, stopping scheduler")
+	logger.Info(ctx, "shutdown signal received")
 	c.Stop()
+	server.Shutdown(ctx)
 	logger.Info(ctx, "db-backup service stopped")
 }
 
@@ -85,4 +103,42 @@ func runBackup(ctx context.Context, cfg config.Config) error {
 
 	logger.Info(ctx, "backup cycle complete")
 	return nil
+}
+
+func makeBackupHandler(ctx context.Context, cfg config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		logger.Info(ctx, "API backup triggered")
+
+		if err := runBackup(ctx, cfg); err != nil {
+			logger.Error(ctx, "API backup failed", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "error",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"status":  "success",
+			"message": "Backup completed successfully",
+		})
+	}
+}
+
+func apiKeyAuth(apiKey string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		providedKey := r.Header.Get("X-API-Key")
+		if providedKey == "" || providedKey != apiKey {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
 }

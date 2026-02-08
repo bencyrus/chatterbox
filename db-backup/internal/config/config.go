@@ -22,6 +22,10 @@ type Config struct {
 
 	// Schedule (cron expression, UTC) e.g. "0 2,14 * * *" for 2am and 2pm UTC
 	BackupSchedule string
+
+	// Backup API
+	BackupServiceAPIKey  string
+	BackupServiceAPIPort string
 }
 
 const (
@@ -33,6 +37,9 @@ const (
 	EnvGCSServiceAccountPrivateKey = "GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_PRIVATE_KEY"
 
 	EnvBackupSchedule = "BACKUP_SCHEDULE"
+
+	EnvBackupServiceAPIKey  = "BACKUP_SERVICE_API_KEY"
+	EnvBackupServiceAPIPort = "BACKUP_SERVICE_API_PORT"
 )
 
 func Load() Config {
@@ -85,6 +92,16 @@ func Load() Config {
 		schedule = "0 2,14 * * *"
 	}
 
+	apiKey := strings.TrimSpace(os.Getenv(EnvBackupServiceAPIKey))
+	if apiKey == "" {
+		panic("BACKUP_SERVICE_API_KEY is required for db-backup service")
+	}
+
+	apiPort := strings.TrimSpace(os.Getenv(EnvBackupServiceAPIPort))
+	if apiPort == "" {
+		apiPort = "9212"
+	}
+
 	return Config{
 		PGHost:                      pgHost,
 		PGPort:                      pgPort,
@@ -95,5 +112,7 @@ func Load() Config {
 		GCSServiceAccountEmail:      serviceAccountEmail,
 		GCSServiceAccountPrivateKey: privateKey,
 		BackupSchedule:              schedule,
+		BackupServiceAPIKey:         apiKey,
+		BackupServiceAPIPort:        apiPort,
 	}
 }
