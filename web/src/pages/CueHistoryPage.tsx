@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCallback, useMemo } from 'react';
-import { HiOutlineClock, HiOutlineCalendar } from 'react-icons/hi2';
+import { HiOutlineClock } from 'react-icons/hi2';
 import { PiWaveformLight } from 'react-icons/pi';
 import { useAppHeader } from '../components/layout/AppHeader';
 import { ROUTES } from '../lib/constants';
@@ -10,6 +10,7 @@ import { CueContentMarkdown } from '../components/cues/CueContentMarkdown';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { NewRecordingButton } from '../components/recording/NewRecordingButton';
+import { CalendarDateBadge } from '../components/ui/CalendarDateBadge';
 import { useCueDetail } from '../hooks/cues/useCueDetail';
 import { getDateGroupKey, formatDurationMs, parseDuration } from '../lib/date';
 import type { CueRecording } from '../types';
@@ -154,10 +155,7 @@ function CueHistoryPage() {
             <div key={groupIndex} className="space-y-3">
               {/* Group header with date badge + count */}
               <div className="flex items-center gap-2 px-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/5 text-text-primary text-label-md">
-                  <HiOutlineCalendar className="w-3.5 h-3.5" />
-                  {group.label}
-                </span>
+                <CalendarDateBadge label={group.label} />
                 <span className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-app-green text-text-primary text-label-md">
                   {group.recordings.length}
                 </span>

@@ -46,11 +46,7 @@ export function getDateGroupKey(date: Date | string): { key: string; label: stri
   } else if (isYesterday(d)) {
     label = 'Yesterday';
   } else {
-    label = new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(d);
+    label = formatStandardDate(d);
   }
   
   return { key, label };
@@ -98,6 +94,37 @@ export function formatDateTime(date: Date | string): string {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
+  }).format(d);
+}
+
+/**
+ * Standard date format used across iOS/Android-style UI.
+ * Example: "7 Feb 2026"
+ */
+export function formatStandardDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(d);
+}
+
+/**
+ * Standard date + time (24h) used for report headers.
+ * Example: "7 Feb 2026, 14:05"
+ */
+export function formatStandardDateTime(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   }).format(d);
 }
 

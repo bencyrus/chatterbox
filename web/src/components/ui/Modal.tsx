@@ -13,6 +13,8 @@ interface ModalProps {
   children: ReactNode;
   className?: string;
   showCloseButton?: boolean;
+  /** Show divider line under the header row. */
+  showHeaderDivider?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -26,6 +28,7 @@ export function Modal({
   children,
   className,
   showCloseButton = true,
+  showHeaderDivider = true,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -94,7 +97,13 @@ export function Modal({
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between p-card border-b border-border">
+          <div
+            className={cn(
+              'flex items-center p-card',
+              title ? 'justify-between' : 'justify-end',
+              showHeaderDivider && 'border-b border-border'
+            )}
+          >
             {title && (
               <h2 id="modal-title" className="text-heading-md text-text-primary">
                 {title}

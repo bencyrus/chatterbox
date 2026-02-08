@@ -1,6 +1,6 @@
-import { HiOutlineCalendar } from 'react-icons/hi2';
 import { RecordingCard } from './RecordingCard';
 import { cn } from '../../lib/cn';
+import { CalendarDateBadge } from '../ui/CalendarDateBadge';
 import type { Recording } from '../../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -34,10 +34,7 @@ export function RecordingGroup({
       {/* Group header with date badge + count badge */}
       <div className="flex items-center gap-2 px-1">
         {/* Date badge */}
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/5 text-text-primary text-label-md">
-          <HiOutlineCalendar className="w-3.5 h-3.5" />
-          {label}
-        </span>
+        <CalendarDateBadge label={label} />
 
         {/* Count badge */}
         <span className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-app-green text-text-primary text-label-md">

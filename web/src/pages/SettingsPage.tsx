@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  HiOutlineArrowRightOnRectangle,
-  HiOutlineTrash,
   HiOutlineShieldCheck,
+  HiOutlineArrowRightOnRectangle,
 } from 'react-icons/hi2';
 import { useAppHeader } from '../components/layout/AppHeader';
 import { Modal, ModalFooter } from '../components/ui/Modal';
@@ -76,7 +75,7 @@ function SettingsPage() {
 
   return (
     <div>
-      <div className="container-page py-6 space-y-8">
+      <div className="container-page py-6 space-y-6">
         {/* Account section */}
         <SettingsSection title="Account">
           <AccountInfo account={account} />
@@ -107,23 +106,32 @@ function SettingsPage() {
 
         {/* Account actions */}
         <SettingsSection title="Account Actions">
-          <SettingsRow
-            icon={<HiOutlineArrowRightOnRectangle className="w-5 h-5" />}
-            label="Sign out"
-            onClick={() => setShowLogoutModal(true)}
-            showChevron={false}
-          />
-          <SettingsRow
-            icon={<HiOutlineTrash className="w-5 h-5" />}
-            label="Delete account"
-            onClick={() => setShowDeleteModal(true)}
-            showChevron={false}
-            danger
-          />
+          <div className="space-y-4">
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              onClick={() => setShowLogoutModal(true)}
+              leftIcon={<HiOutlineArrowRightOnRectangle className="w-5 h-5" />}
+              className="w-full !bg-app-green-strong !text-white hover:!bg-app-green-deep"
+            >
+              Sign out
+            </Button>
+
+            <div className="pt-8">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="w-full text-center text-body-md font-normal text-error-600 hover:text-error-700 transition-colors"
+              >
+                Delete account
+              </button>
+            </div>
+          </div>
         </SettingsSection>
 
         {/* App version */}
-        <div className="text-center pt-8 pb-4">
+        <div className="text-center pt-0 -mt-2 pb-4">
           <p className="text-body-sm text-text-tertiary">
             Chatterbox Web v1.0.0
           </p>

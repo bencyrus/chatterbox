@@ -6,7 +6,6 @@ import { useToast } from '../../contexts/ToastContext';
 import { ApiError } from '../../services/api';
 import type { Recording } from '../../types';
 import { AUDIO_UPLOAD_MIME_TYPE } from '../../lib/constants';
-import { formatDurationMs } from '../../lib/date';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -81,7 +80,9 @@ export function useRecordingUpload({
           const response = await recordingsApi.completeUpload({
             uploadIntentId: intent.uploadIntentId,
             metadata: {
-              duration: formatDurationMs(durationMs),
+              // Store duration as seconds (string) for cross-client compatibility.
+              // iOS currently expects a numeric string (e.g. "8" or "8.5"), not "00:08".
+              duration: String(Math.max(0, Math.round(durationMs / 1000))),
             },
           });
 

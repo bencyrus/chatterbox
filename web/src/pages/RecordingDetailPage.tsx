@@ -4,17 +4,21 @@ import {
   HiDocumentText,
   HiOutlineDocumentText,
   HiOutlineChartBar,
-  HiOutlineCalendar,
+  HiOutlineClock,
+  HiOutlineXCircle,
 } from 'react-icons/hi2';
+import { TbBlockquote } from 'react-icons/tb';
 import { useAppHeader } from '../components/layout/AppHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { ErrorState } from '../components/feedback/ErrorState';
 import { Modal } from '../components/ui/Modal';
+import { CalendarDateBadge } from '../components/ui/CalendarDateBadge';
 import { CueContentMarkdown } from '../components/cues/CueContentMarkdown';
 import { AudioPlayer } from '../components/recording/AudioPlayer';
 import { NewRecordingButton } from '../components/recording/NewRecordingButton';
+import { ReportStatusBadge } from '../components/history/ReportStatusBadge';
 import { recordingsApi } from '../services/recordings';
 import { cuesApi } from '../services/cues';
 import { useTranscription } from '../hooks/history/useTranscription';
@@ -23,6 +27,7 @@ import { ApiError } from '../services/api';
 import { parseDuration } from '../lib/date';
 import { ROUTES } from '../lib/constants';
 import type { Recording, ProcessedFile } from '../types';
+import { CopyButton } from '../components/ui/CopyButton';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RECORDING DETAIL PAGE
@@ -257,15 +262,7 @@ function RecordingDetailPage() {
         <div className="space-y-3">
           {/* Recording date badge */}
           <div className="px-1">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/5 text-text-primary text-label-md">
-              <HiOutlineCalendar className="w-3.5 h-3.5" />
-              {new Date(recording.createdAt).toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </span>
+            <CalendarDateBadge date={recording.createdAt} />
           </div>
 
           {/* Recording card */}
@@ -298,14 +295,18 @@ function RecordingDetailPage() {
               onClick={() => setShowTranscriptModal(true)}
               className="!w-full !bg-app-green-strong !text-white hover:!bg-app-green-deep"
               leftIcon={
-                transcriptionStatus === 'ready' ? (
+                transcriptionStatus === 'processing' ? (
+                  <HiOutlineClock className="w-5 h-5 animate-spin-slow" />
+                ) : transcriptionStatus === 'ready' ? (
                   <HiDocumentText className="w-5 h-5" />
+                ) : transcriptionError ? (
+                  <HiOutlineXCircle className="w-5 h-5" />
                 ) : (
                   <HiOutlineDocumentText className="w-5 h-5" />
                 )
               }
             >
-              View Report
+              {transcriptionStatus === 'processing' ? 'Processing report' : 'View Report'}
             </Button>
           </CardContent>
         </Card>
@@ -316,19 +317,44 @@ function RecordingDetailPage() {
       <Modal
         isOpen={showTranscriptModal}
         onClose={() => setShowTranscriptModal(false)}
-        title={recording.cue?.content?.title || 'Recording Report'}
+        showHeaderDivider={false}
       >
         <div className="space-y-4">
+          {/* Header card (matches iOS sheet header) */}
+          <Card className="p-3">
+            <CardContent className="space-y-2">
+              <h3 className="text-heading-md font-semibold text-text-primary">
+                {recording.cue?.content?.title || 'Recording'}
+              </h3>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <CalendarDateBadge date={recording.createdAt} showTime />
+
+                <ReportStatusBadge status={transcriptionStatus ?? recording.report?.status} />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Transcript content */}
           {transcription ? (
-            <div className="py-2">
-              <h3 className="text-heading-sm font-semibold text-text-primary mb-3">
-                Transcript
-              </h3>
-              <p className="text-body-md text-text-primary whitespace-pre-wrap leading-relaxed">
-                {transcription}
-              </p>
-            </div>
+            <Card className="bg-app-beige">
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <TbBlockquote className="w-5 h-5 text-app-green-strong" />
+                    <h3 className="text-heading-sm font-semibold text-text-primary">
+                      Transcript
+                    </h3>
+                  </div>
+
+                  <CopyButton text={transcription} successMessage="Copied transcript" />
+                </div>
+
+                <p className="text-body-md text-text-primary whitespace-pre-wrap leading-relaxed">
+                  {transcription}
+                </p>
+              </CardContent>
+            </Card>
           ) : transcriptionStatus === 'processing' ? (
             <div className="flex flex-col items-center gap-3 py-8">
               <Spinner size="lg" />
