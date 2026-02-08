@@ -49,7 +49,7 @@ func main() {
 
 	// Set up HTTP API server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/backup", apiKeyAuth(cfg.BackupServiceAPIKey, makeBackupHandler(ctx, cfg)))
+	mux.HandleFunc("/trigger", apiKeyAuth(cfg.BackupServiceAPIKey, makeBackupHandler(ctx, cfg)))
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
