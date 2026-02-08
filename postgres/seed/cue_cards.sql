@@ -311,3 +311,138 @@ insert into cues.cue_stage (cue_id, stage, created_by) values (40, 'published', 
 insert into cues.cue_stage (cue_id, stage, created_by) values (41, 'published', 1);
 insert into cues.cue_stage (cue_id, stage, created_by) values (42, 'published', 1);
 insert into cues.cue_stage (cue_id, stage, created_by) values (43, 'published', 1);
+
+-- Mandarin (zh) cue content
+-- cue_content_id 130..172
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (130, 1, '你想参与哪种社会或社区公益活动？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (131, 2, '有些人很难适应在外国生活。你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (132, 3, '学习或接受教育有没有年龄限制？你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (133, 4, '照顾老年人应该由个人还是政府负责？你怎么看公民责任？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (134, 5, '你同意老年人比年轻人更悲观吗？你对未来的一代乐观吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (135, 6, '你觉得可以和价值观完全不同的人做朋友吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (136, 7, '在一个新的国家交朋友容易吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (137, 8, '旅行会让人成为更好的人吗？你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (138, 9, '你支持还是反对素食菜单？为什么？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (139, 10, '杂志里的减肥建议有用吗？你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (140, 11, '城市里的公共交通应该免费吗？你觉得这是个好主意吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (141, 12, '为了真正享受生活，我们应该少工作一些吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (142, 13, '你觉得应该给孩子手机吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (143, 14, '你更喜欢住在城市还是乡村？为什么？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (144, 15, '你同意旅行只属于有钱人吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (145, 16, '每个人都能减少垃圾吗？你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (146, 17, '你认为艺术类职业算是真正的工作吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (147, 18, '老年人给的建议总是正确的吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (148, 19, '社交网络能让人更容易交到新朋友吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (149, 20, '你怎么看移民到加拿大这件事？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (150, 21, '你对赌博和博彩怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (151, 22, '老年人需要养宠物吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (152, 23, '在工作中使用手机合适吗？你怎么看？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (153, 24, '父母应该用同样的方式教育男孩和女孩吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (154, 25, '学校的主要作用只是教授课本知识吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (155, 26, '阅读对了解一个国家和提升文化素养重要吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (156, 27, '人们离开自己的国家生活在别处，是否总是出于迫不得已？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (157, 28, '言论自由应该有界限吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (158, 29, '不懂一国的语言，真的能了解这个国家吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (159, 30, '要过得开心，必须赚很多钱吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (160, 31, '互联网是否改变了人们在工作中的行为？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (161, 32, '你更喜欢通过哪种媒体获取信息？为什么？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (162, 33, '在外国生活，和当地人建立关系重要吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (163, 34, '生活在国外时，父母应该对孩子说当地语言还是母语？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (164, 35, '发展经济的同时保护环境是否可能？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (165, 36, '在国外生活时，是否应该保留自己的文化和传统？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (166, 37, '给孩子好成绩就给钱是个好主意吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (167, 38, '工作中的幸福感真的重要吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (168, 39, '你觉得职业运动员配得上他们的高薪吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (169, 40, '电视正在逐渐消失吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (170, 41, '孩子花在屏幕前的时间是不是太多了？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (171, 42, '在国外找工作容易吗？', '', 'zh');
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code) values (172, 43, '生活在一个新的国家时，人们应该改变自己的生活习惯吗？', '', 'zh');
+
+-- Spanish (es) cue content
+-- cue_content_id 173..215
+insert into cues.cue_content (cue_content_id, cue_id, title, details, language_code)
+values (173, 1, '¿En qué tipo de acción social o comunitaria te gustaría participar?', '', 'es');
+insert into cues.cue_content values
+(174, 2, 'A algunas personas les cuesta adaptarse a la vida en un país extranjero. ¿Qué opinas?', '', 'es');
+insert into cues.cue_content values
+(175, 3, 'No hay edad para aprender o estudiar. ¿Estás de acuerdo?', '', 'es');
+insert into cues.cue_content values
+(176, 4, '¿Quién debería cuidar a las personas mayores: los ciudadanos o el Estado? ¿Qué opinas del compromiso cívico?', '', 'es');
+insert into cues.cue_content values
+(177, 5, '¿Crees que las personas mayores son más pesimistas que los jóvenes? ¿Eres optimista respecto a las nuevas generaciones?', '', 'es');
+insert into cues.cue_content values
+(178, 6, '¿Es posible ser amigo de alguien con creencias completamente distintas a las tuyas?', '', 'es');
+insert into cues.cue_content values
+(179, 7, '¿Es fácil hacer nuevos amigos en el país de acogida?', '', 'es');
+insert into cues.cue_content values
+(180, 8, 'Viajar te hace mejor persona. ¿Qué piensas?', '', 'es');
+insert into cues.cue_content values
+(181, 9, 'Menús vegetarianos: ¿estás a favor o en contra?', '', 'es');
+insert into cues.cue_content values
+(182, 10, 'Los consejos para adelgazar en las revistas: ¿te parecen útiles o no?', '', 'es');
+insert into cues.cue_content values
+(183, 11, 'El transporte público en las ciudades debería ser gratuito. ¿Te parece una buena idea?', '', 'es');
+insert into cues.cue_content values
+(184, 12, 'Para disfrutar de verdad la vida, ¿deberíamos trabajar menos? ¿Qué opinas?', '', 'es');
+insert into cues.cue_content values
+(185, 13, '¿Deberían los niños tener un teléfono móvil?', '', 'es');
+insert into cues.cue_content values
+(186, 14, '¿Prefieres vivir en la ciudad o en el campo? ¿Por qué?', '', 'es');
+insert into cues.cue_content values
+(187, 15, 'Viajar es una actividad reservada solo para la gente rica. ¿Estás de acuerdo?', '', 'es');
+insert into cues.cue_content values
+(188, 16, 'Todo el mundo puede reducir sus residuos. ¿Qué piensas?', '', 'es');
+insert into cues.cue_content values
+(189, 17, '¿Las profesiones artísticas son “trabajos de verdad”? ¿Cuál es tu opinión?', '', 'es');
+insert into cues.cue_content values
+(190, 18, '¿Las personas mayores dan siempre buenos consejos?', '', 'es');
+insert into cues.cue_content values
+(191, 19, '¿Las redes sociales facilitan hacer nuevos amigos?', '', 'es');
+insert into cues.cue_content values
+(192, 20, 'Emigrar a Canadá: ¿qué opinas al respecto?', '', 'es');
+insert into cues.cue_content values
+(193, 21, 'Juegos de azar y apuestas: ¿qué opinas?', '', 'es');
+insert into cues.cue_content values
+(194, 22, '¿Las personas mayores necesitan una mascota?', '', 'es');
+insert into cues.cue_content values
+(195, 23, 'Usar el móvil en el trabajo: ¿qué te parece?', '', 'es');
+insert into cues.cue_content values
+(196, 24, '¿Los padres deberían educar a niñas y niños de la misma manera?', '', 'es');
+insert into cues.cue_content values
+(197, 25, '¿El papel principal de la escuela es solo enseñar el programa académico?', '', 'es');
+insert into cues.cue_content values
+(198, 26, '¿Leer es esencial para tener cultura y comprender un país?', '', 'es');  
+insert into cues.cue_content values
+(199, 27, 'Cuando la gente deja su país para vivir en otro lugar, ¿siempre es por necesidad?', '', 'es');
+insert into cues.cue_content values
+(200, 28, '¿La libertad de expresión debería tener límites?', '', 'es');
+insert into cues.cue_content values
+(201, 29, '¿De verdad se puede conocer un país sin hablar su idioma?', '', 'es');
+insert into cues.cue_content values
+(202, 30, '¿Hace falta ganar mucho dinero para disfrutar de la vida?', '', 'es');
+insert into cues.cue_content values
+(203, 31, '¿Ha cambiado Internet el comportamiento en el trabajo?', '', 'es');
+insert into cues.cue_content values
+(204, 32, '¿Qué tipo de medio prefieres para informarte y por qué?', '', 'es');
+insert into cues.cue_content values
+(205, 33, 'Para vivir bien en un país extranjero, ¿es necesario relacionarse con la gente local?', '', 'es');
+insert into cues.cue_content values
+(206, 34, 'Al vivir en el extranjero, ¿los padres deberían hablar con sus hijos en el idioma del país o en su lengua materna?', '', 'es');
+insert into cues.cue_content values
+(207, 35, '¿Se puede desarrollar la economía y a la vez proteger el medio ambiente?', '', 'es');
+insert into cues.cue_content values
+(208, 36, 'En un país de acogida, ¿crees que hay que preservar las tradiciones y la cultura propias?', '', 'es');
+insert into cues.cue_content values
+(209, 37, '¿Dar dinero a los niños por buenas notas es una buena idea?', '', 'es');
+insert into cues.cue_content values
+(210, 38, '¿El bienestar en el trabajo es realmente importante?', '', 'es');
+insert into cues.cue_content values
+(211, 39, '¿Los deportistas profesionales se merecen sus sueldos tan altos?', '', 'es');
+insert into cues.cue_content values
+(212, 40, '¿La televisión está desapareciendo poco a poco?', '', 'es');
+insert into cues.cue_content values
+(213, 41, '¿Los niños pasan demasiado tiempo delante de las pantallas?', '', 'es');
+insert into cues.cue_content values
+(214, 42, '¿Es fácil encontrar trabajo en el extranjero?', '', 'es');
+insert into cues.cue_content values
+(215, 43, 'Al vivir en un país de acogida, ¿la gente debería cambiar sus hábitos?', '', 'es');
