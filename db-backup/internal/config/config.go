@@ -29,8 +29,8 @@ const (
 
 	EnvGCSBackupBucket             = "GCS_BACKUP_BUCKET"
 	EnvGCSBackupPrefix             = "GCS_BACKUP_PREFIX"
-	EnvGCSServiceAccountEmail      = "GCS_SERVICE_ACCOUNT_EMAIL"
-	EnvGCSServiceAccountPrivateKey = "GCS_SERVICE_ACCOUNT_PRIVATE_KEY"
+	EnvGCSServiceAccountEmail      = "GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_EMAIL"
+	EnvGCSServiceAccountPrivateKey = "GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_PRIVATE_KEY"
 
 	EnvBackupSchedule = "BACKUP_SCHEDULE"
 )
@@ -72,12 +72,12 @@ func Load() Config {
 
 	serviceAccountEmail := strings.TrimSpace(os.Getenv(EnvGCSServiceAccountEmail))
 	if serviceAccountEmail == "" {
-		panic("GCS_SERVICE_ACCOUNT_EMAIL is required for db-backup service")
+		panic("GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_EMAIL is required for db-backup service")
 	}
 
 	privateKey := strings.TrimSpace(os.Getenv(EnvGCSServiceAccountPrivateKey))
 	if privateKey == "" {
-		panic("GCS_SERVICE_ACCOUNT_PRIVATE_KEY is required for db-backup service")
+		panic("GCS_CHATTERBOX_BUCKET_SERVICE_ACCOUNT_PRIVATE_KEY is required for db-backup service")
 	}
 
 	schedule := strings.TrimSpace(os.Getenv(EnvBackupSchedule))
