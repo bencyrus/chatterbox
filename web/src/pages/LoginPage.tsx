@@ -61,19 +61,45 @@ function LoginPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
   const handleOtpChange = useCallback((index: number, value: string) => {
-    // Only allow digits
-    const digit = value.replace(/\D/g, '').slice(-1);
-    
+    // Only allow digits (and support paste/autofill into a single box)
+    const digits = value.replace(/\D/g, '');
+
+    if (digits.length === 0) {
+      setOtpDigits(prev => {
+        const next = [...prev];
+        next[index] = '';
+        return next;
+      });
+      return;
+    }
+
+    if (digits.length === 1) {
+      const digit = digits;
+      setOtpDigits(prev => {
+        const next = [...prev];
+        next[index] = digit;
+        return next;
+      });
+
+      // Auto-advance to next input
+      if (index < 5) {
+        otpInputRefs.current[index + 1]?.focus();
+      }
+      return;
+    }
+
+    // Multi-digit: distribute across inputs starting at this index
+    const sliced = digits.slice(0, 6 - index).split('');
     setOtpDigits(prev => {
       const next = [...prev];
-      next[index] = digit;
+      sliced.forEach((d, i) => {
+        next[index + i] = d;
+      });
       return next;
     });
 
-    // Auto-advance to next input
-    if (digit && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
+    const nextFocus = Math.min(index + sliced.length, 5);
+    otpInputRefs.current[nextFocus]?.focus();
   }, []);
 
   const handleOtpKeyDown = useCallback((index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -88,16 +114,22 @@ function LoginPage() {
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (pasted.length > 0) {
       const digits = pasted.split('');
+      const firstEmptyIndex = otpDigits.findIndex(d => d === '');
+      const startIndex = firstEmptyIndex === -1 ? 0 : firstEmptyIndex;
+
       setOtpDigits(prev => {
         const next = [...prev];
-        digits.forEach((d, i) => { next[i] = d; });
+        digits.forEach((d, i) => {
+          const target = startIndex + i;
+          if (target <= 5) next[target] = d;
+        });
         return next;
       });
-      // Focus the next empty input or the last one
-      const nextFocus = Math.min(digits.length, 5);
+
+      const nextFocus = Math.min(startIndex + digits.length, 5);
       otpInputRefs.current[nextFocus]?.focus();
     }
-  }, []);
+  }, [otpDigits]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Auto-submit OTP when all 6 digits are entered
