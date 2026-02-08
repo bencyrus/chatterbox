@@ -9,6 +9,9 @@ chatterbox-upload-key.jks
 postgres/backups/*
 !postgres/backups/.gitkeep
 
+# Go build artifacts
+db-backup/db-backup
+
 # IDE and editor files
 .vscode/
 .idea/

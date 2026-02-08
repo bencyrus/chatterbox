@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/bencyrus/chatterbox/db-backup/internal/backup"
-	"github.com/bencyrus/chatterbox/db-backup/internal/cleanup"
 	"github.com/bencyrus/chatterbox/db-backup/internal/config"
 	"github.com/bencyrus/chatterbox/db-backup/internal/upload"
 	"github.com/bencyrus/chatterbox/shared/logger"
@@ -23,10 +22,9 @@ func main() {
 	ctx := context.Background()
 
 	logger.Info(ctx, "db-backup service starting", logger.Fields{
-		"schedule":            cfg.BackupSchedule,
-		"local_retention":     cfg.LocalRetentionDays,
-		"gcs_bucket":          cfg.GCSBackupBucket,
-		"gcs_prefix":          cfg.GCSBackupPrefix,
+		"schedule":   cfg.BackupSchedule,
+		"gcs_bucket": cfg.GCSBackupBucket,
+		"gcs_prefix": cfg.GCSBackupPrefix,
 	})
 
 	// Run one immediate backup on startup
@@ -76,9 +74,13 @@ func runBackup(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 
-	// 3. Clean up old local backups
-	if err := cleanup.CleanupOldBackups(ctx, cfg.LocalRetentionDays); err != nil {
-		logger.Warn(ctx, "cleanup failed (non-fatal)", logger.Fields{"error": err.Error()})
+	// 3. Delete the local backup immediately after successful upload
+	logger.Info(ctx, "deleting local backup after successful upload", logger.Fields{"path": backupPath})
+	if err := os.Remove(backupPath); err != nil {
+		logger.Warn(ctx, "failed to delete local backup (non-fatal)", logger.Fields{
+			"path":  backupPath,
+			"error": err.Error(),
+		})
 	}
 
 	logger.Info(ctx, "backup cycle complete")

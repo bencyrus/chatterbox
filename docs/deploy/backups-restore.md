@@ -18,19 +18,27 @@ The `db-backup` service runs as a sidecar container that:
 
 1. Connects to the `postgres` service over the compose network
 2. Runs `pg_dumpall` on a configurable cron schedule (default: twice daily at 02:00 and 14:00 UTC)
-3. Writes gzipped dumps to `./postgres/backups/` on the host
-4. Uploads each dump to GCS at `gs://<bucket>/<prefix>/cluster_YYYYMMDDTHHMMSSZ.sql.gz`
-5. Cleans up local files older than the configured retention period (default: 3 days)
+3. Creates a temporary gzipped dump in `/backups` (mounted from `./postgres/backups/` on the host)
+4. Uploads the dump to GCS at `gs://<bucket>/<prefix>/cluster_YYYYMMDDTHHMMSSZ.sql.gz`
+5. Deletes the local backup immediately after successful upload (backups only live in GCS)
 
 The sidecar runs one immediate backup on startup, then continues on schedule.
 
 **Configuration:** [`secrets/.env.db-backup`](../../secrets/.env.db-backup.example)
 
+The backup service connects as a dedicated `backup_service_user` database user (created via [`1756076000_backup_service_user.sql`](../../postgres/migrations/1756076000_backup_service_user.sql), like `worker_service_user` and `file_service_user`). Setup:
+
+1. Define `BACKUP_SERVICE_USER_PASSWORD` in [`secrets/.env.postgres`](../../secrets/.env.postgres.example)
+2. Run migrations to create the user (has `pg_read_all_data` and `pg_read_all_settings` for pg_dumpall)
+3. Configure `DATABASE_URL` in [`secrets/.env.db-backup`](../../secrets/.env.db-backup.example)
+
 Key settings:
+- `DATABASE_URL`: Postgres connection string (uses `backup_service_user`)
 - `BACKUP_SCHEDULE`: Cron expression (default `0 2,14 * * *` for twice daily)
-- `LOCAL_RETENTION_DAYS`: How long to keep local backups (default `3`)
 - `GCS_BACKUP_BUCKET` and `GCS_BACKUP_PREFIX`: GCS destination
 - GCS service account credentials (same as files service)
+
+**Note:** Local backups are deleted immediately after successful upload to GCS. The `./postgres/backups/` directory is only used as a temporary staging area during backup creation and upload.
 
 **GCS retention:** Set a bucket lifecycle rule to auto-delete old backups (recommended 30-90 days):
 
