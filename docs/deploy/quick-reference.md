@@ -15,10 +15,16 @@ Common operations for deploying and managing Chatterbox.
 make prod-up-detached
 ```
 
-**Deploy with fresh database (WARNING: destroys data):**
+**Deploy with fresh database and apply migrations (WARNING: destroys data):**
 ```bash
 make prod-fresh-detached
 ```
+
+**Deploy with clean database without migrations:**
+```bash
+make prod-fresh-no-migrations
+```
+Useful when you want to restore from a backup instead of running migrations.
 
 **Deploy and watch all logs in real-time:**
 ```bash
@@ -34,10 +40,16 @@ make prod-up
 make local-up
 ```
 
-**Fresh start with clean database:**
+**Fresh start with clean database and migrations applied:**
 ```bash
 make local-fresh
 ```
+
+**Fresh start without migrations:**
+```bash
+make local-fresh-no-migrations
+```
+Useful when you want to restore from a prod backup instead of running migrations.
 
 **Run in background:**
 ```bash
@@ -76,34 +88,74 @@ MIGRATIONS_ENV=local make migrate
 
 ### Database Backups
 
-**Verify backups are working:**
+**Verify automated backups are working:**
 ```bash
-# Check logs
+# Check backup service logs (production only)
 docker logs db-backup
 
-# List backups in GCS
-gsutil ls -l gs://YOUR_BUCKET/backups/postgres/
+# List all backups in GCS
+gsutil ls -l gs://chatterbox-bucket-main/backups/postgres/
 ```
 
-**Manual backup:**
+**Manual backup (local development):**
 ```bash
 ./postgres/run-db-backup.sh
 ```
 
 The backup will be created in `./postgres/backups/cluster_YYYYMMDDTHHMMSSZ.sql.gz`.
 
-**Restore from GCS:**
-```bash
-# Download the backup file from GCP to the server
-gsutil cp gs://YOUR_BUCKET/backups/postgres/cluster_20260208T050000Z.sql.gz ./postgres/backups/
+---
 
-# Restore to the local running database (wherever you run this command)
-./postgres/run-db-restore.sh cluster_20260208T050000Z.sql.gz
+### Restore Database (Two-Step Process)
+
+Restoring a database backup requires two steps:
+1. **Download** the backup from GCS to local disk
+2. **Restore** the backup to your target database (local or prod)
+
+#### Restore Latest Backup to Local
+
+```bash
+# Step 1: Download latest backup from GCS
+make download-db-latest
+
+# Step 2: Restore to local database
+make local-restore-db-latest
 ```
 
-**IMPORTANT:** The restore script affects the database on the machine where you run it:
-- Run on production VM → restores to production database
-- Run on local machine → restores to local database
+#### Restore Specific Backup to Local
+
+```bash
+# Step 1: Download specific backup from GCS
+make download-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+
+# Step 2: Restore to local database
+make local-restore-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+```
+
+#### Restore Latest Backup to Production (Disaster Recovery)
+
+```bash
+# Step 1: Download latest backup from GCS
+make download-db-latest
+
+# Step 2: Restore to production database
+make prod-restore-db-latest
+```
+
+#### Restore Specific Backup to Production
+
+```bash
+# Step 1: Download specific backup from GCS
+make download-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+
+# Step 2: Restore to production database
+make prod-restore-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+```
+
+**Why two steps?** 
+- Download is the same operation regardless of target (fetches from GCS to `./postgres/backups/`)
+- Restore is environment-specific (applies to local DB vs prod DB)
+- This separation gives you control to inspect/verify the backup before restoring
 
 ---
 

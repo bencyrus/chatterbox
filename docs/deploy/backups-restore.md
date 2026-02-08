@@ -17,7 +17,7 @@ Last verified: 2025-10-08
 The `db-backup` service runs as a sidecar container that:
 
 1. Connects to the `postgres` service over the compose network
-2. Runs `pg_dumpall` on a configurable cron schedule (default: twice daily at 02:00 and 14:00 UTC)
+2. Runs `pg_dumpall` on a configurable cron schedule (default: twice daily at 06:00 and 18:00 UTC / 1:00 AM and 1:00 PM EST)
 3. Creates a temporary gzipped dump in `/backups` (mounted from `./postgres/backups/` on the host)
 4. Uploads the dump to GCS at `gs://<bucket>/<prefix>/cluster_YYYYMMDDTHHMMSSZ.sql.gz`
 5. Deletes the local backup immediately after successful upload (backups only live in GCS)
@@ -34,7 +34,7 @@ The backup service connects as a dedicated `backup_service_user` database user (
 
 Key settings:
 - `DATABASE_URL`: Postgres connection string (uses `backup_service_user`)
-- `BACKUP_SCHEDULE`: Cron expression (default `0 2,14 * * *` for twice daily)
+- `BACKUP_SCHEDULE`: Cron expression (default `0 6,18 * * *` for twice daily at 1am and 1pm EST)
 - `GCS_BACKUP_BUCKET` and `GCS_BACKUP_PREFIX`: GCS destination
 - GCS service account credentials (same as files service)
 
@@ -75,18 +75,42 @@ This rule only affects objects under the `backups/postgres/` prefix.
 ./postgres/run-db-backup.sh
 ```
 
-#### Restore from a local backup
+#### Restore from GCS (Two-Step Process)
 
+Restoring from GCS requires two steps: download, then restore.
+
+**Option 1: Using Make targets (Recommended)**
+
+Restore latest backup to local:
 ```bash
-./postgres/run-db-restore.sh cluster_YYYYMMDDTHHMMSSZ.sql.gz
+make download-db-latest
+make local-restore-db-latest
 ```
 
-#### Restore from GCS (disaster recovery)
+Restore specific backup to local:
+```bash
+make download-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+make local-restore-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+```
+
+Restore latest backup to production (disaster recovery):
+```bash
+make download-db-latest
+make prod-restore-db-latest
+```
+
+Restore specific backup to production:
+```bash
+make download-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+make prod-restore-db-backup BACKUP=cluster_20260208T060000Z.sql.gz
+```
+
+**Option 2: Using scripts directly**
 
 1. Download the backup from GCS:
 
    ```bash
-   gsutil cp gs://YOUR_BUCKET/backups/postgres/cluster_YYYYMMDDTHHMMSSZ.sql.gz ./postgres/backups/
+   gsutil cp gs://chatterbox-bucket-main/backups/postgres/cluster_YYYYMMDDTHHMMSSZ.sql.gz ./postgres/backups/
    ```
 
 2. Restore using the standard script:
@@ -95,10 +119,12 @@ This rule only affects objects under the `backups/postgres/` prefix.
    ./postgres/run-db-restore.sh cluster_YYYYMMDDTHHMMSSZ.sql.gz
    ```
 
+**Note:** The restore script affects the database on the machine where you run it (local vs prod).
+
 #### List available GCS backups
 
 ```bash
-gsutil ls gs://YOUR_BUCKET/backups/postgres/
+gsutil ls gs://chatterbox-bucket-main/backups/postgres/
 ```
 
 ### Notes
