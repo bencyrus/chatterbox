@@ -129,6 +129,24 @@ services:
     labels:
       - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
 
+  db-backup:
+    build:
+      context: .
+      dockerfile: ./db-backup/Dockerfile
+    container_name: db-backup
+    restart: unless-stopped
+    env_file:
+      - ./secrets/.env.db-backup
+    volumes:
+      - ./postgres/backups:/backups
+    networks:
+      - chattterbox-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - 'com.datadoghq.ad.logs=[{"source": "db-backup", "service": "db-backup"}]'
+
   swaggerui:
     image: swaggerapi/swagger-ui:latest
     container_name: swaggerui
