@@ -8,8 +8,6 @@ import { cn } from '../../lib/cn';
 interface RecordingTimerProps {
   /** Duration in milliseconds */
   durationMs: number;
-  /** Whether recording is active */
-  isRecording?: boolean;
   /** Additional class names */
   className?: string;
 }
@@ -20,7 +18,6 @@ interface RecordingTimerProps {
 
 export function RecordingTimer({
   durationMs,
-  isRecording = false,
   className,
 }: RecordingTimerProps) {
   return (

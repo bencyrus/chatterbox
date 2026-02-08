@@ -284,7 +284,7 @@ export function RecordingControls({
             <button
               type="button"
               onClick={handleCancelDiscard}
-              className="px-4 py-2 text-body-md text-text-primary bg-app-beige rounded-button hover:bg-app-beige-hover transition-colors"
+              className="px-4 py-2 text-body-md text-text-primary bg-[#D9D9D9] rounded-button hover:bg-[#CECECE] transition-colors"
             >
               Cancel
             </button>
@@ -316,7 +316,6 @@ export function RecordingControls({
       {/* Timer */}
       <RecordingTimer
         durationMs={durationMs}
-        isRecording={state === 'recording'}
       />
 
       {/* Record button */}
