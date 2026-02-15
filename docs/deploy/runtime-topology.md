@@ -17,6 +17,8 @@ Last verified: 2025-10-08
 - `postgrest`: HTTP API over Postgres; exposes `3000` on host in this compose for development; depends on healthy `postgres`.
 - `files`: file URL helper service; exposes `9090` on host for dev.
 - `worker`: background processor for `queues.task`; internal only; depends on `postgrest` start and healthy `postgres`.
+- `metabase`: analytics dashboard (Metabase); internal only; depends on healthy `metabase-postgres`; served at `analytics.chatterboxtalk.com` via Caddy.
+- `metabase-postgres`: dedicated Postgres 16 instance for Metabase application data; fully isolated from the main `postgres` service.
 - `datadog`: agent for log collection; tails container stdout based on labels.
 
 ### Network
@@ -30,7 +32,7 @@ Last verified: 2025-10-08
 ### Secrets and environment
 
 - Service env files live under `secrets/`:
-  - `.env.gateway`, `.env.worker`, `.env.files`, `.env.postgrest`, `.env.postgres`, `.env.datadog`.
+  - `.env.gateway`, `.env.worker`, `.env.files`, `.env.postgrest`, `.env.postgres`, `.env.datadog`, `.env.metabase`, `.env.metabase-postgres`.
 - Migrations use placeholder substitution from `secrets/.env.postgres` via `postgres/scripts/apply_migrations.sh`:
   - Pattern `{secrets.<key>}` → env var: strip leading `secret_`, uppercase the rest.
   - Example: `{secrets.secret_jwt_secret}` → `JWT_SECRET`.
@@ -38,7 +40,7 @@ Last verified: 2025-10-08
 
 ### Volumes
 
-- `postgres_data` for DB state; `caddy_data`/`caddy_config` for Caddy state; `postgres/backups` mounted into container `/backups`.
+- `postgres_data` for DB state; `caddy_data`/`caddy_config` for Caddy state; `postgres/backups` mounted into container `/backups`; `metabase_postgres_data` for Metabase application DB state.
 
 ### See also
 

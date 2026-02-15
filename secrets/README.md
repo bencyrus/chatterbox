@@ -37,6 +37,8 @@ Create these as needed for your deployment:
 - `.env.files` - Files service configuration
 - `.env.caddy` - Caddy web server configuration
 - `.env.datadog` - Datadog agent configuration
+- `.env.metabase` - Metabase analytics application configuration
+- `.env.metabase-postgres` - Metabase dedicated Postgres database configuration
 
 ## Security Notes
 

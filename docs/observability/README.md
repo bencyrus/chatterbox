@@ -19,7 +19,7 @@ Last verified: 2025-10-08
 
 ### How it works
 
-- `docker-compose.yaml` sets `com.datadoghq.ad.logs` labels on services (e.g., `gateway`, `postgrest`, `postgres`, `caddy`, `files`, `worker`). The Datadog agent container mounts Docker socket and reads these labels to tail stdout.
+- `docker-compose.yaml` sets `com.datadoghq.ad.logs` labels on services (e.g., `gateway`, `postgrest`, `postgres`, `caddy`, `files`, `worker`, `metabase`, `metabase-postgres`). The Datadog agent container mounts Docker socket and reads these labels to tail stdout.
 - Log formats:
 
 - Go services (`gateway`, `files`, `worker`) emit JSON via `shared/logger`.

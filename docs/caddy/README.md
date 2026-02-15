@@ -59,6 +59,11 @@ Last verified: 2025-10-08
   }
   ```
 
+### Analytics (Metabase)
+
+- `analytics.chatterboxtalk.com` proxies to the `metabase` service on port `3000`.
+- Metabase handles its own authentication; no additional Caddy auth configuration needed.
+
 ### Operations
 
 - Ports: exposes `80` and `443` only; upstream gateway is on the private network.

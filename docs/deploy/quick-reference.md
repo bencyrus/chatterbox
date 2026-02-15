@@ -8,7 +8,7 @@ Common operations for deploying and managing Chatterbox.
 
 **Prerequisites:**
 - Create all required secrets files in `secrets/` (copy from `.example` files)
-- Ensure `.env.postgres`, `.env.gateway`, `.env.worker`, `.env.files`, `.env.caddy`, `.env.db-backup` exist with real values
+- Ensure `.env.postgres`, `.env.gateway`, `.env.worker`, `.env.files`, `.env.caddy`, `.env.db-backup`, `.env.metabase`, `.env.metabase-postgres` exist with real values
 
 **Deploy in background:**
 ```bash

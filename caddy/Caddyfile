@@ -138,3 +138,16 @@ EOF
         format json
     }
 }
+
+analytics.chatterboxtalk.com {
+    header X-Request-ID {http.request.uuid}
+
+    reverse_proxy metabase:3000 {
+        header_up X-Request-ID {http.request.uuid}
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
