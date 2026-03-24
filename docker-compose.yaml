@@ -11,8 +11,6 @@ services:
       - chattterbox-network
     depends_on:
       - postgrest
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "gateway", "service": "gateway"}]'
   postgres:
     build:
       context: .
@@ -34,8 +32,6 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "postgres", "service": "postgres"}]'
   postgrest:
     image: postgrest/postgrest:latest
     container_name: postgrest
@@ -50,10 +46,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      # Datadog log collection
-      - 'com.datadoghq.ad.logs=[{"source": "postgrest", "service": "postgrest"}]'
-
   caddy:
     image: caddy:alpine
     container_name: caddy
@@ -75,27 +67,23 @@ services:
       - swaggerui
       - web
       - metabase
-    labels:
-      # Datadog log collection
-      - 'com.datadoghq.ad.logs=[{"source": "caddy", "service": "caddy"}]'
 
-  datadog:
-    image: gcr.io/datadoghq/agent:7
-    container_name: dd-agent
+  alloy:
+    image: grafana/alloy:latest
+    container_name: alloy
     restart: unless-stopped
     profiles:
       - observability
     env_file:
-      - ./secrets/.env.datadog
+      - ./secrets/.env.alloy
     volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /proc/:/host/proc/:ro
-      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
+    ports:
+      - "12345:12345"
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
     networks:
       - chattterbox-network
-    pid: host
 
   files:
     build:
@@ -109,8 +97,6 @@ services:
       - ./secrets/.env.files
     networks:
       - chattterbox-network
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "files", "service": "files"}]'
 
   worker:
     build:
@@ -127,8 +113,6 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "worker", "service": "worker"}]'
 
   db-backup:
     build:
@@ -145,8 +129,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "db-backup", "service": "db-backup"}]'
 
   swaggerui:
     image: swaggerapi/swagger-ui:latest
@@ -158,8 +140,6 @@ services:
       - chattterbox-network
     depends_on:
       - gateway
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "swaggerui", "service": "swaggerui"}]'
 
   web:
     build:
@@ -172,8 +152,6 @@ services:
       - "5173:5173"
     networks:
       - chattterbox-network
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "web", "service": "web"}]'
 
   metabase-postgres:
     image: postgres:16
@@ -191,8 +169,6 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "metabase-postgres", "service": "metabase-postgres"}]'
 
   metabase:
     image: metabase/metabase:latest
@@ -210,8 +186,6 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-    labels:
-      - 'com.datadoghq.ad.logs=[{"source": "metabase", "service": "metabase"}]'
 
 volumes:
   caddy_data:
