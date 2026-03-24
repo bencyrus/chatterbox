@@ -1,7 +1,7 @@
 ## Chatterbox Documentation
 
 Status: current
-Last verified: 2025-10-08
+Last verified: 2026-03-24
 
 ### Why this exists
 
@@ -62,6 +62,9 @@ Last verified: 2025-10-08
   - [HTTP Middleware](shared/middleware.md)
 
 - [Observability](observability/README.md)
+
+  - [Grafana Cloud Setup](observability/grafana-cloud.md)
+  - [Datadog Setup (Legacy)](observability/datadog.md)
 
 - [Deploy](deploy/README.md)
   - [Runtime Topology](deploy/runtime-topology.md)
