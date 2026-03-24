@@ -184,9 +184,6 @@ prod-restore-db-backup:
 	@echo ""
 	@echo "✓ Restored to prod: $(BACKUP)"
 
-prod-up-with-observability:
-	COMPOSE_PROFILES=observability $(PROD_COMPOSE) up --build
-
 ## Stop targets
 
 down:
