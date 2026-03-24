@@ -1,4 +1,4 @@
-.PHONY: up fresh migrate local-up local-up-detached local-fresh local-fresh-detached local-fresh-no-migrations download-db-latest download-db-backup local-restore-db-latest local-restore-db-backup prod-up prod-up-detached prod-fresh prod-fresh-detached prod-fresh-no-migrations prod-restore-db-latest prod-restore-db-backup prod-up-with-observability down down-volumes local-down local-down-volumes
+.PHONY: up fresh migrate local-up local-up-detached local-fresh local-fresh-detached local-fresh-no-migrations download-db-latest download-db-backup local-restore-db-latest local-restore-db-backup prod-up prod-up-detached prod-fresh prod-fresh-detached prod-fresh-no-migrations prod-restore-db-latest prod-restore-db-backup down down-volumes local-down local-down-volumes
 
 LOCAL_COMPOSE := docker compose --progress=plain -f docker-compose.local.yaml
 PROD_COMPOSE := docker compose --progress=plain -f docker-compose.yaml
