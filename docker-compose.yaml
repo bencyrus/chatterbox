@@ -72,8 +72,6 @@ services:
     image: grafana/alloy:latest
     container_name: alloy
     restart: unless-stopped
-    profiles:
-      - observability
     env_file:
       - ./secrets/.env.alloy
     volumes:
