@@ -57,6 +57,9 @@ export const ROUTES = {
   PRIVACY: '/privacy',
   ACCOUNT_RESTORE: '/request-account-restore',
   REQUEST_ACCOUNT_RESTORE: '/request-account-restore',
+  /** Database-first documentation (public) */
+  DB_FIRST: '/db-first',
+  DB_FIRST_INDEX: '/db-first',
   // Protected routes (under /app)
   APP: '/app',
   CUES: '/app/cues',
@@ -65,6 +68,11 @@ export const ROUTES = {
   HISTORY: '/app/history',
   RECORDING_DETAIL: '/app/history/:recordingId',
   SETTINGS: '/app/settings',
+} as const;
+
+export const DB_FIRST_ROUTES = {
+  INDEX: '/db-first',
+  page: (slug: string) => `/db-first/${slug}`,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -111,4 +111,17 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  /* Database-first documentation */
+  .docs-prose :where(h2 > a, h3 > a) {
+    @apply text-inherit no-underline hover:text-inherit;
+  }
+
+  .docs-prose :where(pre) {
+    @apply m-0 bg-transparent p-0;
+  }
+
+  .docs-prose :where(code):not(pre code) {
+    @apply before:content-none after:content-none;
+  }
 }

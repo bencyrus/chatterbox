@@ -31,6 +31,9 @@ import LoginPage from './pages/LoginPage';
 import MagicLinkPage from './pages/MagicLinkPage';
 import PrivacyPage from './pages/PrivacyPage';
 import RequestAccountRestorePage from './pages/RequestAccountRestorePage';
+import { DocsLayout } from './components/docs/DocsLayout';
+import DocsIndexPage from './pages/docs/DocsIndexPage';
+import DocsPage from './pages/docs/DocsPage';
 
 // Lazy load feature pages
 const CuesPage = lazy(() => import('./pages/CuesPage'));
@@ -91,6 +94,12 @@ function AppBootstrap() {
           path={ROUTES.REQUEST_ACCOUNT_RESTORE}
           element={<RequestAccountRestorePage />}
         />
+
+        {/* Database-first documentation */}
+        <Route path={ROUTES.DB_FIRST} element={<DocsLayout />}>
+          <Route index element={<DocsIndexPage />} />
+          <Route path=":slug" element={<DocsPage />} />
+        </Route>
 
         {/* ─────────────────────────────────────────────────────────────────
             PROTECTED ROUTES (under /app)
