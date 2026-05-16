@@ -3,19 +3,17 @@ FROM node:20-alpine AS development
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
+COPY web/package*.json ./
 RUN npm install
 
-# Copy source code
-COPY . .
+COPY web/ .
+# Docs are outside web/; path alias resolves via DB_FIRST_DOCS_ROOT in compose
+COPY docs/database-first /docs/database-first
 
-# Expose Vite dev server port
+ENV DB_FIRST_DOCS_ROOT=/docs/database-first
+
 EXPOSE 5173
 
-# Start development server
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # Production stage
@@ -23,24 +21,18 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies (including dev dependencies for build)
+COPY web/package*.json ./
 RUN npm install
 
-# Copy source code
-COPY . .
+COPY web/ .
+COPY docs/database-first /docs/database-first
 
-# Build the application
+ENV DB_FIRST_DOCS_ROOT=/docs/database-first
+
 RUN npm run build
 
-# Install a lightweight static file server
 RUN npm install -g serve
 
-# Expose port 5173 (same as dev for consistency)
 EXPOSE 5173
 
-# Serve the built files
 CMD ["serve", "-s", "dist", "-l", "5173"]
-

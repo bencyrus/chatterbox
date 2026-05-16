@@ -110,15 +110,18 @@ services:
 
   web:
     build:
-      context: ./web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: web/Dockerfile
       target: development
     container_name: web
     restart: unless-stopped
+    environment:
+      DB_FIRST_DOCS_ROOT: /docs/database-first
     ports:
       - "5173:5173"
     volumes:
       - ./web:/app
+      - ./docs/database-first:/docs/database-first
       - /app/node_modules
     networks:
       - chattterbox-network

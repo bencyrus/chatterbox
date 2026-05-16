@@ -1,0 +1,12 @@
+# Repo-root dockerignore for services built with context: . (e.g. web)
+**
+
+!web/
+!web/**
+
+!docs/
+!docs/database-first/
+!docs/database-first/**
+
+web/node_modules
+web/dist
