@@ -207,8 +207,8 @@ as $$
         'background', true,
         'metadata', jsonb_build_object(
             'purpose', 'recording_evaluation',
-            'profile_cue_recording_id', _profile_cue_recording_id,
-            'recording_evaluation_task_id', _recording_evaluation_task_id
+            'profile_cue_recording_id', _profile_cue_recording_id::text,
+            'recording_evaluation_task_id', _recording_evaluation_task_id::text
         ),
         'instructions',
             'You are a CEFR speaking evaluator for Chatterbox. Evaluate the learner speaking performance using only the transcript and cue context. Rate the performance on the CEFR A1-C2 scale. Do not infer audio-only qualities such as pronunciation, fluency pauses, intonation, or accent unless they are directly evident in the transcript. Return concise, actionable feedback.',
@@ -499,6 +499,13 @@ begin
     _facts := learning.recording_evaluation_openai_task_facts(_recording_evaluation_task_id);
 
     if not _facts.has_openai_retrieval then
+        if _openai_supervisor_result->>'status' in ('max_attempts_reached', 'webhook_timeout') then
+            return jsonb_build_object(
+                'status', 'openai_response_failed',
+                'openai_status', _openai_supervisor_result->>'status'
+            );
+        end if;
+
         perform learning.recording_evaluation_supervisor_recheck(_recording_evaluation_task_id, _run_count);
         return jsonb_build_object(
             'status', 'waiting_for_openai_response',

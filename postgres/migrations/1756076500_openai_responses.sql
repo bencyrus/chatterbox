@@ -522,7 +522,7 @@ security definer
 as $$
 declare
     _openai_response_attempt_id bigint := (_payload->>'openai_response_attempt_id')::bigint;
-    _facts record;
+    _request_body jsonb;
 begin
     -- 1. VALIDATION
     if _openai_response_attempt_id is null then
@@ -530,14 +530,14 @@ begin
     end if;
 
     -- 2. FACTS
-    _facts := openai.get_openai_response_create_payload_facts(_openai_response_attempt_id);
+    _request_body := openai.get_openai_response_create_payload_facts(_openai_response_attempt_id);
 
     -- 3. LOGIC
-    if _facts.request_body is null then
+    if _request_body is null then
         return jsonb_build_object('status', 'openai_response_attempt_not_found');
     end if;
 
-    if _facts.request_body->'background' is distinct from 'true'::jsonb then
+    if _request_body->'background' is distinct from 'true'::jsonb then
         return jsonb_build_object('status', 'background_true_required');
     end if;
 
@@ -546,7 +546,7 @@ begin
         'status', 'succeeded',
         'payload', jsonb_build_object(
             'openai_response_attempt_id', _openai_response_attempt_id,
-            'request_body', _facts.request_body
+            'request_body', _request_body
         )
     );
 end;
@@ -566,7 +566,7 @@ declare
     _openai_response_id text := _payload->'worker_payload'->>'openai_response_id';
     _response_status text := _payload->'worker_payload'->>'status';
     _response_body jsonb := _payload->'worker_payload'->'response_body';
-    _facts record;
+    _request_body jsonb;
 begin
     -- 1. VALIDATION
     if _openai_response_attempt_id is null then
@@ -582,10 +582,10 @@ begin
     end if;
 
     -- 2. FACTS
-    _facts := openai.get_openai_response_create_payload_facts(_openai_response_attempt_id);
+    _request_body := openai.get_openai_response_create_payload_facts(_openai_response_attempt_id);
 
     -- 3. LOGIC
-    if _facts.request_body is null then
+    if _request_body is null then
         return jsonb_build_object('status', 'openai_response_attempt_not_found');
     end if;
 
@@ -599,7 +599,7 @@ begin
     ) values (
         _openai_response_attempt_id,
         _openai_response_id,
-        _facts.request_body,
+        _request_body,
         _response_body,
         _response_status
     )
@@ -659,7 +659,7 @@ security definer
 as $$
 declare
     _openai_response_attempt_id bigint := (_payload->>'openai_response_attempt_id')::bigint;
-    _facts record;
+    _openai_response_id text;
 begin
     -- 1. VALIDATION
     if _openai_response_attempt_id is null then
@@ -667,10 +667,10 @@ begin
     end if;
 
     -- 2. FACTS
-    _facts := openai.get_openai_response_retrieve_payload_facts(_openai_response_attempt_id);
+    _openai_response_id := openai.get_openai_response_retrieve_payload_facts(_openai_response_attempt_id);
 
     -- 3. LOGIC
-    if _facts.openai_response_id is null or _facts.openai_response_id = '' then
+    if _openai_response_id is null or _openai_response_id = '' then
         return jsonb_build_object('status', 'openai_response_request_not_found');
     end if;
 
@@ -679,7 +679,7 @@ begin
         'status', 'succeeded',
         'payload', jsonb_build_object(
             'openai_response_attempt_id', _openai_response_attempt_id,
-            'openai_response_id', _facts.openai_response_id
+            'openai_response_id', _openai_response_id
         )
     );
 end;
