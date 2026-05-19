@@ -1,4 +1,4 @@
-# Repo-root dockerignore for services built with context: . (e.g. web)
+# Repo-root dockerignore for services built with context: .
 **
 
 !web/
@@ -7,6 +7,24 @@
 !docs/
 !docs/database-first/
 !docs/database-first/**
+
+!worker/
+!worker/**
+
+!shared/
+!shared/**
+
+!postgres/
+!postgres/**
+
+!db-backup/
+!db-backup/**
+
+!gateway/
+!gateway/**
+
+!files/
+!files/**
 
 web/node_modules
 web/dist
