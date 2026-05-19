@@ -17,6 +17,7 @@ type Config struct {
 	FileServiceURL    string
 	FileServiceAPIKey string
 	ElevenLabsAPIKey  string
+	OpenAIAPIKey      string
 
 	// Worker settings
 	PollInterval time.Duration
@@ -34,6 +35,7 @@ func Load() Config {
 		FileServiceURL:    getEnv("FILE_SERVICE_URL", ""),
 		FileServiceAPIKey: getEnv("FILE_SERVICE_API_KEY", ""),
 		ElevenLabsAPIKey:  getEnv("ELEVENLABS_API_KEY", ""),
+		OpenAIAPIKey:      getEnv("OPENAI_API_KEY", ""),
 		LogLevel:          getEnv("LOG_LEVEL", "info"),
 	}
 

@@ -13,16 +13,18 @@ import (
 	"github.com/bencyrus/chatterbox/worker/internal/processing"
 	"github.com/bencyrus/chatterbox/worker/internal/services/email"
 	"github.com/bencyrus/chatterbox/worker/internal/services/files"
+	"github.com/bencyrus/chatterbox/worker/internal/services/openai"
 	"github.com/bencyrus/chatterbox/worker/internal/services/sms"
 	"github.com/bencyrus/chatterbox/worker/internal/types"
 )
 
 type Worker struct {
-	cfg      config.Config
-	db       *database.Client
-	emailSvc *email.Service
-	smsSvc   *sms.Service
-	filesSvc *files.Service
+	cfg       config.Config
+	db        *database.Client
+	emailSvc  *email.Service
+	smsSvc    *sms.Service
+	filesSvc  *files.Service
+	openAISvc *openai.Service
 
 	dispatcher *processing.Dispatcher
 	handlers   *processing.HandlerInvoker
@@ -39,6 +41,7 @@ func NewWorker(cfg config.Config) (*Worker, error) {
 	emailSvc := email.NewService(cfg.ResendAPIKey)
 	smsSvc := sms.NewService()
 	filesSvc := files.NewService(cfg.FileServiceURL, cfg.FileServiceAPIKey)
+	openAISvc := openai.NewService(cfg.OpenAIAPIKey)
 	// Build processing stack
 	handlers := processing.NewHandlerInvoker(db)
 	dispatcher := processing.NewDispatcher()
@@ -47,6 +50,8 @@ func NewWorker(cfg config.Config) (*Worker, error) {
 	dispatcher.Register(processing.NewSMSProcessor(handlers, smsSvc))
 	dispatcher.Register(processing.NewFileDeleteProcessor(handlers, filesSvc))
 	dispatcher.Register(processing.NewTranscriptionKickoffProcessor(handlers, filesSvc, cfg.ElevenLabsAPIKey))
+	dispatcher.Register(processing.NewOpenAIResponseCreateProcessor(handlers, openAISvc))
+	dispatcher.Register(processing.NewOpenAIResponseRetrieveProcessor(handlers, openAISvc))
 
 	return &Worker{
 		cfg:        cfg,
@@ -54,6 +59,7 @@ func NewWorker(cfg config.Config) (*Worker, error) {
 		emailSvc:   emailSvc,
 		smsSvc:     smsSvc,
 		filesSvc:   filesSvc,
+		openAISvc:  openAISvc,
 		dispatcher: dispatcher,
 		handlers:   handlers,
 	}, nil
