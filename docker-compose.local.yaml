@@ -23,7 +23,7 @@ services:
     env_file:
       - ./secrets/.env.postgres.local
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
       - ./postgres/backups:/backups
     networks:
       - chattterbox-network
