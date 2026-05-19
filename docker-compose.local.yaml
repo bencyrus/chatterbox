@@ -80,6 +80,9 @@ services:
       - ./secrets/.env.files.local
     networks:
       - chattterbox-network
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   worker:
     build:
