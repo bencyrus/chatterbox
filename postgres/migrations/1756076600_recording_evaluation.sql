@@ -119,6 +119,10 @@ as $$
         'strengths', e.strengths,
         'improvement_areas', e.improvement_areas,
         'recommended_next_steps', e.recommended_next_steps,
+        'grammar_mistakes', coalesce(e.raw_evaluation->'grammar_mistakes', '[]'::jsonb),
+        'unnatural_phrases', coalesce(e.raw_evaluation->'unnatural_phrases', '[]'::jsonb),
+        'unnatural_words', coalesce(e.raw_evaluation->'unnatural_words', '[]'::jsonb),
+        'improved_version', coalesce(e.raw_evaluation->>'improved_version', ''),
         'created_at', e.created_at
     )
     from learning.recording_evaluation e
@@ -165,11 +169,15 @@ create or replace function learning.recording_evaluation_openai_task_facts(
     out openai_response_attempt_id bigint,
     out has_openai_retrieval boolean,
     out has_evaluation boolean,
+    out has_openai_task_failed boolean,
     out response_body jsonb
 )
-language sql
+language plpgsql
 stable
 as $$
+declare
+    _max_attempts integer := 2;
+begin
     select
         t.profile_cue_recording_id,
         t.openai_response_task_id,
@@ -177,6 +185,13 @@ as $$
         r.openai_response_retrieval_id is not null,
         learning.has_recording_evaluation(t.profile_cue_recording_id),
         r.response_body
+    into
+        profile_cue_recording_id,
+        openai_response_task_id,
+        openai_response_attempt_id,
+        has_openai_retrieval,
+        has_evaluation,
+        response_body
     from learning.recording_evaluation_task t
     left join openai.openai_response_attempt a
         on a.openai_response_task_id = t.openai_response_task_id
@@ -185,6 +200,15 @@ as $$
     where t.recording_evaluation_task_id = _recording_evaluation_task_id
     order by a.created_at desc, a.openai_response_attempt_id desc
     limit 1;
+
+    has_openai_task_failed := (
+        select count(*)::integer >= _max_attempts
+        from openai.openai_response_attempt oa
+        join openai.openai_response_attempt_failed oaf
+            on oaf.openai_response_attempt_id = oa.openai_response_attempt_id
+        where oa.openai_response_task_id = recording_evaluation_openai_task_facts.openai_response_task_id
+    );
+end;
 $$;
 
 -- =============================================================================
@@ -211,7 +235,11 @@ as $$
             'recording_evaluation_task_id', _recording_evaluation_task_id::text
         ),
         'instructions',
-            'You are a CEFR speaking evaluator for Chatterbox. Evaluate the learner speaking performance using only the transcript and cue context. Rate the performance on the CEFR A1-C2 scale. Do not infer audio-only qualities such as pronunciation, fluency pauses, intonation, or accent unless they are directly evident in the transcript. Return concise, actionable feedback.',
+            'You are a language coach for Chatterbox. Given a learner''s spoken transcript and the cue they were responding to, produce a detailed evaluation. '
+            || '1) Rate CEFR level (A1-C2). 2) Write a concise summary. 3) List strengths and improvement areas. 4) List every grammar mistake with the original text, the correction, and a short explanation. '
+            || '5) List unnatural phrases — phrases a native speaker would not say — with a natural replacement and explanation. 6) List unnatural or awkward word choices with a better alternative and explanation. '
+            || '7) Write an improved version of the full transcript that keeps the same tone, meaning, and personality but fixes grammar, uses natural phrasing, and improves argumentation and sentence structure. Do not make it significantly more advanced — keep it close to the learner''s level but polished. '
+            || 'Do not infer audio-only qualities (pronunciation, pauses, intonation) unless evident in the transcript text. If the transcript has no issues for a category, return an empty array.',
         'input', jsonb_build_array(
             jsonb_build_object(
                 'role', 'user',
@@ -240,7 +268,11 @@ as $$
                         'summary',
                         'strengths',
                         'improvement_areas',
-                        'recommended_next_steps'
+                        'recommended_next_steps',
+                        'grammar_mistakes',
+                        'unnatural_phrases',
+                        'unnatural_words',
+                        'improved_version'
                     ),
                     'properties', jsonb_build_object(
                         'cefr_level', jsonb_build_object(
@@ -265,6 +297,52 @@ as $$
                             'type', 'array',
                             'items', jsonb_build_object('type', 'string'),
                             'description', 'Practice suggestions appropriate to the evaluated level.'
+                        ),
+                        'grammar_mistakes', jsonb_build_object(
+                            'type', 'array',
+                            'description', 'Every grammar mistake found in the transcript.',
+                            'items', jsonb_build_object(
+                                'type', 'object',
+                                'additionalProperties', false,
+                                'required', jsonb_build_array('original', 'correction', 'explanation'),
+                                'properties', jsonb_build_object(
+                                    'original', jsonb_build_object('type', 'string', 'description', 'The exact text from the transcript containing the mistake.'),
+                                    'correction', jsonb_build_object('type', 'string', 'description', 'The corrected version of the text.'),
+                                    'explanation', jsonb_build_object('type', 'string', 'description', 'Brief explanation of the grammar rule.')
+                                )
+                            )
+                        ),
+                        'unnatural_phrases', jsonb_build_object(
+                            'type', 'array',
+                            'description', 'Phrases that are grammatically correct but sound unnatural to a native speaker.',
+                            'items', jsonb_build_object(
+                                'type', 'object',
+                                'additionalProperties', false,
+                                'required', jsonb_build_array('phrase', 'natural_replacement', 'explanation'),
+                                'properties', jsonb_build_object(
+                                    'phrase', jsonb_build_object('type', 'string', 'description', 'The unnatural phrase from the transcript.'),
+                                    'natural_replacement', jsonb_build_object('type', 'string', 'description', 'How a native speaker would say it.'),
+                                    'explanation', jsonb_build_object('type', 'string', 'description', 'Why the replacement sounds more natural.')
+                                )
+                            )
+                        ),
+                        'unnatural_words', jsonb_build_object(
+                            'type', 'array',
+                            'description', 'Individual words that are awkward or unusual in context, with better alternatives.',
+                            'items', jsonb_build_object(
+                                'type', 'object',
+                                'additionalProperties', false,
+                                'required', jsonb_build_array('word', 'better_word', 'explanation'),
+                                'properties', jsonb_build_object(
+                                    'word', jsonb_build_object('type', 'string', 'description', 'The awkward or unusual word from the transcript.'),
+                                    'better_word', jsonb_build_object('type', 'string', 'description', 'A more natural word to use instead.'),
+                                    'explanation', jsonb_build_object('type', 'string', 'description', 'Why the alternative is better in this context.')
+                                )
+                            )
+                        ),
+                        'improved_version', jsonb_build_object(
+                            'type', 'string',
+                            'description', 'A polished rewrite of the full transcript. Same tone and personality, but with corrected grammar, natural phrasing, and improved argumentation and sentence structure. Not dramatically more advanced — close to the learner level but cleaner.'
                         )
                     )
                 )
@@ -433,8 +511,18 @@ language plpgsql
 security definer
 as $$
 declare
-    _recheck_interval_seconds integer := 3;
+    _recheck_interval_seconds integer := 5;
 begin
+    if exists (
+        select 1 from queues.task t
+        where not exists (select 1 from queues.task_completed c where c.task_id = t.task_id)
+          and t.payload->>'db_function' = 'learning.recording_evaluation_supervisor'
+          and (t.payload->>'recording_evaluation_task_id')::bigint = _recording_evaluation_task_id
+          and t.scheduled_at > now()
+    ) then
+        return;
+    end if;
+
     perform queues.enqueue(
         'db_function',
         jsonb_build_object(

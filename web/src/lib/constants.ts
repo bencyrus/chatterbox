@@ -22,6 +22,9 @@ export const MAGIC_LINK_COOLDOWN_MS = 60 * 1000; // 60 seconds
 /** Interval for polling transcription status (in milliseconds) */
 export const TRANSCRIPTION_POLL_INTERVAL_MS = 5000; // 5 seconds
 
+/** Interval for polling evaluation status (in milliseconds) */
+export const EVALUATION_POLL_INTERVAL_MS = 5000; // 5 seconds
+
 // ═══════════════════════════════════════════════════════════════════════════
 // UI CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════════════

@@ -6,6 +6,11 @@ import {
   HiOutlineChartBar,
   HiOutlineClock,
   HiOutlineXCircle,
+  HiOutlineSparkles,
+  HiOutlineExclamationTriangle,
+  HiOutlineChatBubbleBottomCenterText,
+  HiOutlinePencilSquare,
+  HiOutlineArrowPath,
 } from 'react-icons/hi2';
 import { TbBlockquote } from 'react-icons/tb';
 import { useAppHeader } from '../components/layout/AppHeader';
@@ -22,11 +27,18 @@ import { ReportStatusBadge } from '../components/history/ReportStatusBadge';
 import { recordingsApi } from '../services/recordings';
 import { cuesApi } from '../services/cues';
 import { useTranscription } from '../hooks/history/useTranscription';
+import { useEvaluation } from '../hooks/history/useEvaluation';
 import { useProfile } from '../contexts/ProfileContext';
 import { ApiError } from '../services/api';
 import { parseDuration } from '../lib/date';
 import { ROUTES } from '../lib/constants';
-import type { Recording, ProcessedFile } from '../types';
+import type {
+  Recording,
+  ProcessedFile,
+  GrammarMistake,
+  UnnaturalPhrase,
+  UnnaturalWord,
+} from '../types';
 import { CopyButton } from '../components/ui/CopyButton';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -149,6 +161,19 @@ function RecordingDetailPage() {
   } = useTranscription({ 
     recording, 
     onRefresh: refreshRecording,
+  });
+
+  // Evaluation hook (user must explicitly request)
+  const {
+    evaluation,
+    status: evaluationStatus,
+    isRequesting: isRequestingEvaluation,
+    error: evaluationError,
+    requestEvaluation,
+  } = useEvaluation({
+    recording,
+    onRefresh: refreshRecording,
+    autoRequest: false,
   });
 
   // Navigation handlers
@@ -313,14 +338,14 @@ function RecordingDetailPage() {
         </div>
       </div>
 
-      {/* Transcript Modal */}
+      {/* Report Modal */}
       <Modal
         isOpen={showTranscriptModal}
         onClose={() => setShowTranscriptModal(false)}
         showHeaderDivider={false}
       >
         <div className="space-y-4">
-          {/* Header card (matches iOS sheet header) */}
+          {/* Header card */}
           <Card className="p-3">
             <CardContent className="space-y-2">
               <h3 className="text-heading-md font-semibold text-text-primary">
@@ -330,7 +355,10 @@ function RecordingDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <CalendarDateBadge date={recording.createdAt} showTime />
 
-                <ReportStatusBadge status={transcriptionStatus ?? recording.report?.status} />
+                <ReportStatusBadge
+                  transcriptionStatus={transcriptionStatus ?? recording.report?.status}
+                  evaluationStatus={evaluationStatus ?? recording.report?.evaluation?.status}
+                />
               </div>
             </CardContent>
           </Card>
@@ -386,6 +414,169 @@ function RecordingDetailPage() {
                 Generate Transcript
               </Button>
             </div>
+          )}
+
+          {/* Evaluation section (only shown when transcript is available) */}
+          {transcription && (
+            <>
+              {evaluation ? (
+                <>
+                  {/* CEFR Level + Summary */}
+                  <Card>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <HiOutlineSparkles className="w-5 h-5 text-app-green-strong" />
+                        <h3 className="text-heading-sm font-semibold text-text-primary">
+                          Evaluation
+                        </h3>
+                        <span className="ml-auto inline-flex items-center rounded-full bg-app-green-strong/10 px-2.5 py-0.5 text-label-md font-semibold text-app-green-strong">
+                          {evaluation.cefrLevel}
+                        </span>
+                      </div>
+                      <p className="text-body-md text-text-secondary leading-relaxed">
+                        {evaluation.summary}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Grammar Mistakes */}
+                  {evaluation.grammarMistakes?.length > 0 && (
+                    <Card className="bg-red-50">
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <HiOutlineExclamationTriangle className="w-5 h-5 text-red-600" />
+                          <h3 className="text-heading-sm font-semibold text-text-primary">
+                            Grammar Mistakes
+                          </h3>
+                          <span className="ml-auto text-label-sm text-text-tertiary">
+                            {evaluation.grammarMistakes.length}
+                          </span>
+                        </div>
+                        <ul className="space-y-3">
+                          {evaluation.grammarMistakes.map((m: GrammarMistake, i: number) => (
+                            <li key={i} className="space-y-1">
+                              <div className="flex items-start gap-2 text-body-md">
+                                <span className="line-through text-red-600/70">{m.original}</span>
+                                <span className="text-text-tertiary">→</span>
+                                <span className="font-medium text-app-green-strong">{m.correction}</span>
+                              </div>
+                              <p className="text-body-sm text-text-tertiary">{m.explanation}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Unnatural Phrases */}
+                  {evaluation.unnaturalPhrases?.length > 0 && (
+                    <Card className="bg-amber-50">
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <HiOutlineChatBubbleBottomCenterText className="w-5 h-5 text-amber-600" />
+                          <h3 className="text-heading-sm font-semibold text-text-primary">
+                            Unnatural Phrases
+                          </h3>
+                          <span className="ml-auto text-label-sm text-text-tertiary">
+                            {evaluation.unnaturalPhrases.length}
+                          </span>
+                        </div>
+                        <ul className="space-y-3">
+                          {evaluation.unnaturalPhrases.map((p: UnnaturalPhrase, i: number) => (
+                            <li key={i} className="space-y-1">
+                              <div className="flex items-start gap-2 text-body-md">
+                                <span className="text-amber-700/70">{p.phrase}</span>
+                                <span className="text-text-tertiary">→</span>
+                                <span className="font-medium text-app-green-strong">{p.naturalReplacement}</span>
+                              </div>
+                              <p className="text-body-sm text-text-tertiary">{p.explanation}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Unnatural Words */}
+                  {evaluation.unnaturalWords?.length > 0 && (
+                    <Card className="bg-blue-50">
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <HiOutlinePencilSquare className="w-5 h-5 text-blue-600" />
+                          <h3 className="text-heading-sm font-semibold text-text-primary">
+                            Word Choices
+                          </h3>
+                          <span className="ml-auto text-label-sm text-text-tertiary">
+                            {evaluation.unnaturalWords.length}
+                          </span>
+                        </div>
+                        <ul className="space-y-3">
+                          {evaluation.unnaturalWords.map((w: UnnaturalWord, i: number) => (
+                            <li key={i} className="space-y-1">
+                              <div className="flex items-start gap-2 text-body-md">
+                                <span className="text-blue-700/70">{w.word}</span>
+                                <span className="text-text-tertiary">→</span>
+                                <span className="font-medium text-app-green-strong">{w.betterWord}</span>
+                              </div>
+                              <p className="text-body-sm text-text-tertiary">{w.explanation}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Improved Version */}
+                  {evaluation.improvedVersion && (
+                    <Card className="bg-app-green-strong/5 border border-app-green-strong/20">
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <HiOutlineSparkles className="w-5 h-5 text-app-green-strong" />
+                            <h3 className="text-heading-sm font-semibold text-text-primary">
+                              Improved Version
+                            </h3>
+                          </div>
+
+                          <CopyButton text={evaluation.improvedVersion} successMessage="Copied improved version" />
+                        </div>
+                        <p className="text-body-md text-text-primary whitespace-pre-wrap leading-relaxed italic">
+                          {evaluation.improvedVersion}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              ) : evaluationStatus === 'processing' || isRequestingEvaluation ? (
+                <div className="flex flex-col items-center gap-3 py-6">
+                  <Spinner size="md" />
+                  <p className="text-body-md text-text-secondary">
+                    Evaluating your performance...
+                  </p>
+                  <p className="text-body-sm text-text-tertiary">
+                    Checking grammar, phrasing, and word choices
+                  </p>
+                </div>
+              ) : evaluationStatus === 'none' ? (
+                <div className="py-4 text-center">
+                  {evaluationError && (
+                    <p className="text-body-sm text-red-700 mb-4">
+                      {evaluationError}
+                    </p>
+                  )}
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={requestEvaluation}
+                    isLoading={isRequestingEvaluation}
+                    leftIcon={<HiOutlineArrowPath className="w-5 h-5" />}
+                    className="!bg-app-green-strong !text-white hover:!bg-app-green-deep"
+                  >
+                    Evaluate Performance
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       </Modal>

@@ -981,9 +981,19 @@ language plpgsql
 security definer
 as $$
 declare
-    _recheck_interval_seconds integer := 3;
+    _recheck_interval_seconds integer := 5;
     _next_check_at timestamptz;
 begin
+    if exists (
+        select 1 from queues.task t
+        where not exists (select 1 from queues.task_completed c where c.task_id = t.task_id)
+          and t.payload->>'db_function' = 'openai.openai_response_supervisor'
+          and (t.payload->>'openai_response_task_id')::bigint = _openai_response_task_id
+          and t.scheduled_at > now()
+    ) then
+        return;
+    end if;
+
     _next_check_at := now() + (_recheck_interval_seconds * interval '1 second');
 
     perform queues.enqueue(

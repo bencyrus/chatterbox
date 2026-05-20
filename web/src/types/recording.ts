@@ -28,6 +28,48 @@ export interface ProcessedFile {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// EVALUATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type EvaluationStatus = 'none' | 'processing' | 'ready';
+
+export interface GrammarMistake {
+  original: string;
+  correction: string;
+  explanation: string;
+}
+
+export interface UnnaturalPhrase {
+  phrase: string;
+  naturalReplacement: string;
+  explanation: string;
+}
+
+export interface UnnaturalWord {
+  word: string;
+  betterWord: string;
+  explanation: string;
+}
+
+export interface EvaluationResult {
+  cefrLevel: string;
+  summary: string;
+  strengths: string[];
+  improvementAreas: string[];
+  recommendedNextSteps: string[];
+  grammarMistakes: GrammarMistake[];
+  unnaturalPhrases: UnnaturalPhrase[];
+  unnaturalWords: UnnaturalWord[];
+  improvedVersion: string;
+  createdAt: string;
+}
+
+export interface RecordingEvaluation {
+  status: EvaluationStatus;
+  result: EvaluationResult | null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // REPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -36,6 +78,7 @@ export type ReportStatus = 'none' | 'processing' | 'ready';
 export interface RecordingReport {
   status: ReportStatus;
   transcript: string | null;
+  evaluation: RecordingEvaluation;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -127,6 +170,15 @@ export interface CompleteUploadResponse {
 export interface TranscriptionRequestResponse {
   status: 'started' | 'in_progress' | 'already_transcribed';
   recordingTranscriptionTaskId?: number;
+}
+
+export interface RequestEvaluationRequest {
+  profileCueRecordingId: number;
+}
+
+export interface EvaluationRequestResponse {
+  status: 'started' | 'in_progress' | 'already_evaluated' | 'transcript_not_ready';
+  recordingEvaluationTaskId?: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

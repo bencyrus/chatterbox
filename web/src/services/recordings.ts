@@ -12,6 +12,8 @@ import type {
   CompleteUploadResponse,
   RequestTranscriptionRequest,
   TranscriptionRequestResponse,
+  RequestEvaluationRequest,
+  EvaluationRequestResponse,
 } from '../types';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -86,6 +88,23 @@ export async function requestTranscription(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// EVALUATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Request evaluation for a recording
+ * POST /rpc/request_recording_evaluation
+ */
+export async function requestEvaluation(
+  params: RequestEvaluationRequest
+): Promise<EvaluationRequestResponse> {
+  return apiClient.post<EvaluationRequestResponse>(
+    '/rpc/request_recording_evaluation',
+    { profileCueRecordingId: params.profileCueRecordingId }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // EXPORT NAMESPACE
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -94,4 +113,5 @@ export const recordingsApi = {
   createUploadIntent,
   completeUpload,
   requestTranscription,
+  requestEvaluation,
 };
