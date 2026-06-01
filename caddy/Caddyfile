@@ -114,7 +114,7 @@ EOF
     "target": {
       "namespace": "android_app",
       "package_name": "{$ANDROID_APP_PACKAGE}",
-      "sha256_cert_fingerprints": [{$ANDROID_APP_SHA256_FPS}]
+      "sha256_cert_fingerprints": ["{$ANDROID_APP_SHA256_FPS}"]
     }
   }
 ]
