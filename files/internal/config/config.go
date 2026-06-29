@@ -29,6 +29,20 @@ type Config struct {
 
 	// Internal API key used to authenticate gateway calls
 	FileServiceAPIKey string
+
+	// Public base URL of this files service, used to build proxy
+	// upload/download URLs handed to clients (e.g. https://files.chatterboxtalk.com).
+	FilesPublicBaseURL string
+
+	// Secret used to sign/verify short-lived HMAC proxy tokens that
+	// authorize the streaming upload/download endpoints.
+	ProxySigningSecret string
+
+	// Optional: host:port of a GCS-compatible emulator for the data-plane
+	// storage client (e.g. gcs:4443). When set, the storage client talks to
+	// the emulator without authentication. The official storage client also
+	// reads this value from the STORAGE_EMULATOR_HOST environment variable.
+	StorageEmulatorHost string
 }
 
 const (
@@ -46,6 +60,11 @@ const (
 
 	EnvEnvironment    = "FILES_ENVIRONMENT"
 	EnvGCSEmulatorURL = "GCS_EMULATOR_URL"
+
+	// Proxy (server-side streaming) configuration
+	EnvFilesPublicBaseURL  = "FILES_PUBLIC_BASE_URL"
+	EnvProxySigningSecret  = "FILE_PROXY_SIGNING_SECRET"
+	EnvStorageEmulatorHost = "STORAGE_EMULATOR_HOST"
 )
 
 func Load() Config {
@@ -95,6 +114,18 @@ func Load() Config {
 
 	emulatorURL := strings.TrimSpace(os.Getenv(EnvGCSEmulatorURL))
 
+	publicBaseURL := strings.TrimRight(strings.TrimSpace(os.Getenv(EnvFilesPublicBaseURL)), "/")
+	if publicBaseURL == "" {
+		panic("FILES_PUBLIC_BASE_URL is required for files service")
+	}
+
+	proxySecret := strings.TrimSpace(os.Getenv(EnvProxySigningSecret))
+	if proxySecret == "" {
+		panic("FILE_PROXY_SIGNING_SECRET is required for files service")
+	}
+
+	storageEmulatorHost := strings.TrimSpace(os.Getenv(EnvStorageEmulatorHost))
+
 	return Config{
 		Port:                   port,
 		DatabaseURL:            dbURL,
@@ -105,5 +136,8 @@ func Load() Config {
 		FileServiceAPIKey:      apiKey,
 		Environment:            environment,
 		GCSEmulatorURL:         emulatorURL,
+		FilesPublicBaseURL:     publicBaseURL,
+		ProxySigningSecret:     proxySecret,
+		StorageEmulatorHost:    storageEmulatorHost,
 	}
 }
